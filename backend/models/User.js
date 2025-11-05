@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     avatarUrl: { type: String, default: '' },
     averageRating: { type: Number, default: 0 },
     reviewsCount: { type: Number, default: 0 },
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
