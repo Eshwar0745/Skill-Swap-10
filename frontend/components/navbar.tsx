@@ -1,0 +1,185 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Menu, Moon, Sun, LogOut } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+
+interface NavbarProps {
+  darkMode: boolean
+  onToggleDarkMode: () => void
+}
+
+export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
+  const pathname = usePathname()
+  const [isOpen, setIsOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  const links = [
+    { href: "/", label: "Home" },
+    { href: "/explore", label: "Explore" },
+    { href: "/chat", label: "Chat" },
+    { href: "/profile", label: "Profile" },
+  ]
+
+  return (
+    <motion.nav
+      initial={{ y: -100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm transition-all duration-300"
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Link
+              href="/"
+              className="flex items-center gap-2 font-bold text-xl text-primary hover:text-primary/80 transition-colors duration-200"
+            >
+              <motion.div
+                className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center text-primary-foreground text-sm font-bold"
+                whileHover={{ rotate: 10 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+              >
+                SS
+              </motion.div>
+              <span className="hidden sm:inline">SkillSwap</span>
+            </Link>
+          </motion.div>
+
+          {/* Desktop Navigation */}
+          <motion.div
+            className="hidden md:flex items-center gap-1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            {links.map((link, index) => (
+              <motion.div
+                key={link.href}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 + index * 0.05 }}
+              >
+                <Link
+                  href={link.href}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 relative ${
+                    pathname === link.href
+                      ? "text-primary bg-primary/10"
+                      : "text-foreground/70 hover:text-foreground hover:bg-background"
+                  }`}
+                >
+                  <motion.span whileHover={{ y: -2 }} transition={{ duration: 0.2 }} className="inline-block">
+                    {link.label}
+                  </motion.span>
+                  {pathname === link.href && (
+                    <motion.div
+                      layoutId="navbar-underline"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary to-secondary rounded-full"
+                      transition={{ duration: 0.3 }}
+                    />
+                  )}
+                </Link>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Right side actions */}
+          <div className="flex items-center gap-2">
+            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleDarkMode}
+                className="rounded-full transition-all duration-200"
+              >
+                <motion.div
+                  key={darkMode ? "sun" : "moon"}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex items-center justify-center"
+                >
+                  {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                </motion.div>
+              </Button>
+            </motion.div>
+
+            {isAuthenticated ? (
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsAuthenticated(false)}
+                  className="rounded-full transition-all duration-200"
+                >
+                  <LogOut className="h-5 w-5" />
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Link href="/login">
+                  <Button variant="default" className="rounded-full transition-all duration-200">
+                    Login
+                  </Button>
+                </Link>
+              </motion.div>
+            )}
+
+            {/* Mobile menu button */}
+            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(!isOpen)}
+                className="md:hidden rounded-full transition-all duration-200"
+              >
+                <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                  <Menu className="h-5 w-5" />
+                </motion.div>
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Mobile Navigation */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden pb-3 space-y-1 overflow-hidden"
+            >
+              {links.map((link, index) => (
+                <motion.div
+                  key={link.href}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: index * 0.05 }}
+                >
+                  <Link
+                    href={link.href}
+                    className={`block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                      pathname === link.href
+                        ? "text-primary bg-primary/10"
+                        : "text-foreground/70 hover:text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.nav>
+  )
+}
