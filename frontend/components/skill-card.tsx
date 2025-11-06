@@ -1,19 +1,67 @@
 "use client"
 import { Button } from "@/components/ui/button"
-import { MessageCircle } from "lucide-react"
+import { MessageCircle, HandshakeIcon } from "lucide-react"
 import { useState } from "react"
 import { motion } from "framer-motion"
+import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
+import { api } from "@/lib/api"
 
 interface Skill {
-  id: number
+  id: string | number
   title: string
   category: string
-  user: { name: string; avatar: string }
+  location?: string
+  user: { name: string; avatar: string; id?: string }
   image: string
+  description?: string
+  _id?: string
+  userId?: string
 }
 
 export default function SkillCard({ skill }: { skill: Skill }) {
   const [isHovered, setIsHovered] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const { user, isAuthenticated } = useAuth()
+  const router = useRouter()
+
+  const skillId = skill._id || skill.id
+  const ownerId = skill.userId || skill.user?.id
+
+  const handleRequestExchange = async () => {
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
+    }
+
+    if (String(ownerId) === String(user?.id)) {
+      alert("You can't request an exchange with yourself!")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await api.exchanges.create({
+        providerId: ownerId,
+        offeredSkillId: skillId,
+        notes: `I'm interested in learning ${skill.title}!`
+      })
+      alert('Exchange request sent! Check your exchanges page.')
+      router.push('/exchanges')
+    } catch (e: any) {
+      alert(e?.message || 'Failed to send exchange request')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMessage = () => {
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
+    }
+    router.push(`/messages?userId=${ownerId}`)
+  }
 
   return (
     <motion.div
@@ -54,6 +102,9 @@ export default function SkillCard({ skill }: { skill: Skill }) {
           <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
             {skill.title}
           </h3>
+          {skill.description && (
+            <p className="text-sm text-foreground/60 line-clamp-2">{skill.description}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pt-2">
@@ -65,16 +116,31 @@ export default function SkillCard({ skill }: { skill: Skill }) {
           <span className="text-sm text-foreground/70">{skill.user.name}</span>
         </div>
 
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            size="sm"
-            variant="default"
-            className="w-full rounded-full gap-2 mt-2 transition-all duration-200 group-hover:shadow-md"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Request Swap
-          </Button>
-        </motion.div>
+        <div className="flex gap-2">
+          <motion.div className="flex-1" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              variant="default"
+              className="w-full rounded-full gap-2 transition-all duration-200"
+              onClick={handleRequestExchange}
+              disabled={loading || String(ownerId) === String(user?.id)}
+            >
+              <HandshakeIcon className="w-4 h-4" />
+              {loading ? 'Sending...' : 'Request Swap'}
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full px-3"
+              onClick={handleMessage}
+              disabled={String(ownerId) === String(user?.id)}
+            >
+              <MessageCircle className="w-4 h-4" />
+            </Button>
+          </motion.div>
+        </div>
       </div>
     </motion.div>
   )

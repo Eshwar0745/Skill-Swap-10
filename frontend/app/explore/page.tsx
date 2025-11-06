@@ -1,145 +1,81 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import SkillCard from "@/components/skill-card"
 import { Search } from "lucide-react"
 import { motion } from "framer-motion"
 import { ScrollReveal } from "@/components/scroll-reveal"
-
-const allSkills = [
-  {
-    id: 1,
-    title: "Web Design",
-    category: "Design",
-    location: "New York",
-    user: { name: "Alex Chen", avatar: "/placeholder.svg?key=eeg5o" },
-    image: "/placeholder.svg?key=j2oz9",
-  },
-  {
-    id: 2,
-    title: "JavaScript Mastery",
-    category: "Programming",
-    location: "San Francisco",
-    user: { name: "Sarah Kim", avatar: "/placeholder.svg?key=fss0l" },
-    image: "/placeholder.svg?key=edn2i",
-  },
-  {
-    id: 3,
-    title: "Photography Basics",
-    category: "Creative",
-    location: "Los Angeles",
-    user: { name: "Mike Johnson", avatar: "/placeholder.svg?key=ld0xe" },
-    image: "/placeholder.svg?key=fjd9v",
-  },
-  {
-    id: 4,
-    title: "Spanish Language",
-    category: "Languages",
-    location: "Miami",
-    user: { name: "Maria Garcia", avatar: "/placeholder.svg?key=qby93" },
-    image: "/placeholder.svg?key=45n2s",
-  },
-  {
-    id: 5,
-    title: "React Development",
-    category: "Programming",
-    location: "Seattle",
-    user: { name: "David Park", avatar: "/placeholder.svg?key=mnd02" },
-    image: "/placeholder.svg?key=knj9p",
-  },
-  {
-    id: 6,
-    title: "UI/UX Design",
-    category: "Design",
-    location: "Austin",
-    user: { name: "Emma Wilson", avatar: "/placeholder.svg?key=ols34" },
-    image: "/placeholder.svg?key=rnd3x",
-  },
-  {
-    id: 7,
-    title: "Video Editing",
-    category: "Creative",
-    location: "Nashville",
-    user: { name: "Chris Miller", avatar: "/placeholder.svg?key=qpk89" },
-    image: "/placeholder.svg?key=vdn4k",
-  },
-  {
-    id: 8,
-    title: "French Language",
-    category: "Languages",
-    location: "Boston",
-    user: { name: "Pierre Laurent", avatar: "/placeholder.svg?key=jdm92" },
-    image: "/placeholder.svg?key=frn1m",
-  },
-  {
-    id: 9,
-    title: "Graphic Design",
-    category: "Design",
-    location: "Portland",
-    user: { name: "Lisa Brown", avatar: "/placeholder.svg?key=jse03" },
-    image: "/placeholder.svg?key=grd5n",
-  },
-  {
-    id: 10,
-    title: "Piano Lessons",
-    category: "Music",
-    location: "Chicago",
-    user: { name: "James Carter", avatar: "/placeholder.svg?key=mos28" },
-    image: "/placeholder.svg?key=pno7q",
-  },
-  {
-    id: 11,
-    title: "Digital Marketing",
-    category: "Business",
-    location: "Denver",
-    user: { name: "Rachel Green", avatar: "/placeholder.svg?key=rgs45" },
-    image: "/placeholder.svg?key=dmn8s",
-  },
-  {
-    id: 12,
-    title: "Yoga & Fitness",
-    category: "Health",
-    location: "Phoenix",
-    user: { name: "Sophia Lee", avatar: "/placeholder.svg?key=yli67" },
-    image: "/placeholder.svg?key=yga9t",
-  },
-]
-
-const categories = ["All", "Design", "Programming", "Creative", "Languages", "Music", "Business", "Health"]
-const locations = [
-  "All",
-  "New York",
-  "San Francisco",
-  "Los Angeles",
-  "Miami",
-  "Seattle",
-  "Austin",
-  "Nashville",
-  "Boston",
-  "Portland",
-  "Chicago",
-  "Denver",
-  "Phoenix",
-]
+import { api } from "@/lib/api"
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedLocation, setSelectedLocation] = useState("All")
+  const [skillType, setSkillType] = useState<"offered" | "requested">("offered")
+  const [skills, setSkills] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState<string[]>(["All"])
+  const [locations, setLocations] = useState<string[]>(["All"])
 
+  // Load categories from backend
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res = await api.categories.list()
+        setCategories(["All", ...(res.categories || [])])
+      } catch (e) {
+        console.error("Failed to load categories:", e)
+        setCategories(["All", "Programming", "Design", "Other"])
+      }
+    }
+    loadCategories()
+  }, [])
+
+  // Load skills from backend
+  useEffect(() => {
+    const loadSkills = async () => {
+      setLoading(true)
+      try {
+        const params: any = { limit: 100 }
+        if (selectedCategory !== "All") {
+          params.category = selectedCategory
+        }
+        if (searchQuery.trim()) {
+          params.q = searchQuery.trim()
+        }
+
+        const res = skillType === "offered" 
+          ? await api.offeredSkills.list(params)
+          : await api.requestedSkills.list(params)
+        
+        setSkills(res.items || [])
+
+        // Extract unique locations from skills
+        const uniqueLocations = Array.from(
+          new Set(
+            (res.items || [])
+              .map((s: any) => s.location)
+              .filter((loc: string) => loc && loc.trim())
+          )
+        ).sort()
+        setLocations(["All", ...uniqueLocations])
+      } catch (e) {
+        console.error("Failed to load skills:", e)
+        setSkills([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadSkills()
+  }, [skillType, selectedCategory, searchQuery])
+
+  // Filter skills by location (client-side since backend doesn't filter by location yet)
   const filteredSkills = useMemo(() => {
-    return allSkills.filter((skill) => {
-      const matchesSearch =
-        skill.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        skill.category.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "All" || skill.category === selectedCategory
-      const matchesLocation = selectedLocation === "All" || skill.location === selectedLocation
-
-      return matchesSearch && matchesCategory && matchesLocation
-    })
-  }, [searchQuery, selectedCategory, selectedLocation])
+    if (selectedLocation === "All") return skills
+    return skills.filter((skill) => skill.location === selectedLocation)
+  }, [skills, selectedLocation])
 
   return (
     <div className="min-h-screen py-12">
@@ -160,11 +96,29 @@ export default function ExplorePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
+            {/* Skill Type Toggle */}
+            <div className="flex gap-2 justify-center">
+              <Button
+                variant={skillType === "offered" ? "default" : "outline"}
+                onClick={() => setSkillType("offered")}
+                className="rounded-full"
+              >
+                Skills Offered
+              </Button>
+              <Button
+                variant={skillType === "requested" ? "default" : "outline"}
+                onClick={() => setSkillType("requested")}
+                className="rounded-full"
+              >
+                Skills Wanted
+              </Button>
+            </div>
+
             {/* Search Bar */}
             <motion.div className="relative" whileFocus={{ scale: 1.02 }}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
-                placeholder="Search skills..."
+                placeholder="Search skills by title or description..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 rounded-full py-2 h-11"
@@ -218,14 +172,19 @@ export default function ExplorePage() {
 
             {/* Results Count */}
             <motion.div className="text-sm text-foreground/60" animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-              Showing {filteredSkills.length} skill{filteredSkills.length !== 1 ? "s" : ""}
+              {loading ? "Loading..." : `Showing ${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}`}
             </motion.div>
           </motion.div>
         </div>
 
         {/* Skills Grid */}
         <div className="mt-12">
-          {filteredSkills.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+              <p className="mt-4 text-foreground/60">Loading skills...</p>
+            </div>
+          ) : filteredSkills.length > 0 ? (
             <motion.div
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
               initial="hidden"
@@ -242,7 +201,19 @@ export default function ExplorePage() {
               }}
             >
               {filteredSkills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} />
+                <SkillCard key={skill._id} skill={{
+                  id: skill._id,
+                  title: skill.title,
+                  category: skill.categories?.[0] || 'Other',
+                  user: {
+                    name: skill.user?.name || 'Anonymous',
+                    avatar: skill.user?.avatarUrl || '/placeholder.svg',
+                    id: skill.user?._id
+                  },
+                  image: '/placeholder.svg',
+                  description: skill.description,
+                  userId: skill.user?._id
+                }} />
               ))}
             </motion.div>
           ) : (

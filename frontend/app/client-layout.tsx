@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/next"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { useState, useEffect } from "react"
+import { AuthProvider } from "@/context/AuthContext"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -38,11 +39,11 @@ export default function ClientLayout({
   }
 
   return (
-    <>
+    <AuthProvider>
       <Navbar darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />
       <main className="min-h-screen">{children}</main>
       <Footer />
       <Analytics />
-    </>
+    </AuthProvider>
   )
 }

@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react"
@@ -15,23 +16,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { login } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      if (email && password) {
-        localStorage.setItem("isAuthenticated", "true")
-        localStorage.setItem("userEmail", email)
-        router.push("/")
-      } else {
-        setError("Please fill in all fields")
-      }
+    try {
+      await login(email, password)
+      router.push("/")
+    } catch (e: any) {
+      setError(e?.message || "Login failed")
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   return (

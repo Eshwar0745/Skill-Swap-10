@@ -1,89 +1,117 @@
-"use client"
+﻿"use client"
 
-import { useState } from "react"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit2, Plus, X, Star, MapPin, Mail, Phone } from "lucide-react"
+import { Edit2, Plus, X, Star, MapPin, Mail } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
+import { api } from "@/lib/api"
 
 interface UserSkill {
-  id: number
+  _id: string
   title: string
-  category: string
-  level: "beginner" | "intermediate" | "advanced"
-}
-
-interface UserProfile {
-  name: string
-  email: string
-  phone: string
-  location: string
-  bio: string
-  avatar: string
-  offeredSkills: UserSkill[]
-  requestedSkills: UserSkill[]
-  rating: number
-  reviews: number
-}
-
-const initialProfile: UserProfile = {
-  name: "Sarah Kim",
-  email: "sarah.kim@example.com",
-  phone: "+1 (555) 123-4567",
-  location: "San Francisco, CA",
-  bio: "Passionate about JavaScript and helping others learn to code. Coffee enthusiast and open source contributor.",
-  avatar: "/placeholder.svg?key=fss0l",
-  offeredSkills: [
-    { id: 1, title: "JavaScript Mastery", category: "Programming", level: "advanced" },
-    { id: 2, title: "Web Development", category: "Programming", level: "advanced" },
-    { id: 3, title: "React Basics", category: "Programming", level: "intermediate" },
-  ],
-  requestedSkills: [
-    { id: 4, title: "UI/UX Design", category: "Design", level: "beginner" },
-    { id: 5, title: "Photography", category: "Creative", level: "beginner" },
-  ],
-  rating: 4.8,
-  reviews: 24,
+  categories: string[]
+  description: string
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState(initialProfile)
+  const { user, isAuthenticated } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState(profile)
+  const [editData, setEditData] = useState({ bio: '', location: '' })
   const [showAddSkill, setShowAddSkill] = useState(false)
-  const [newSkill, setNewSkill] = useState({ title: "", category: "", level: "beginner" as const })
+  const [newSkill, setNewSkill] = useState({ title: "", categories: [""], description: "" })
   const [skillType, setSkillType] = useState<"offered" | "requested">("offered")
+  const [offeredSkills, setOfferedSkills] = useState<UserSkill[]>([])
+  const [requestedSkills, setRequestedSkills] = useState<UserSkill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [availableCategories, setAvailableCategories] = useState<string[]>([])
+
+  useEffect(() => {
+    loadCategories()
+    if (!user) return
+    loadProfile()
+  }, [user])
+
+  const loadCategories = async () => {
+    try {
+      const res = await api.categories.list()
+      setAvailableCategories(res.categories || [])
+    } catch (e) {
+      console.error(e)
+      setAvailableCategories(['Programming', 'Design', 'Language Learning', 'Other'])
+    }
+  }
+
+  const loadProfile = async () => {
+    if (!user?.id) return
+    setLoading(true)
+    try {
+      const [off, req] = await Promise.all([
+        api.offeredSkills.list({ userId: user.id }),
+        api.requestedSkills.list({ userId: user.id }),
+      ])
+      setOfferedSkills(off.items || [])
+      setRequestedSkills(req.items || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleEditChange = (field: string, value: string) => {
     setEditData({ ...editData, [field]: value })
   }
 
-  const handleSaveProfile = () => {
-    setProfile(editData)
-    setIsEditing(false)
+  const handleSaveProfile = async () => {
+    if (!user?.id) return
+    try {
+      await api.users.updateProfile(user.id, editData)
+      alert('Profile updated successfully!')
+      setIsEditing(false)
+      // Optionally reload user data
+      window.location.reload()
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update profile')
+    }
   }
 
-  const handleAddSkill = () => {
-    if (newSkill.title && newSkill.category) {
-      const updatedProfile = { ...profile }
-      const skillList = skillType === "offered" ? updatedProfile.offeredSkills : updatedProfile.requestedSkills
-      skillList.push({
-        id: Math.max(...skillList.map((s) => s.id), 0) + 1,
-        ...newSkill,
-      })
-      setProfile(updatedProfile)
-      setNewSkill({ title: "", category: "", level: "beginner" })
+  const handleAddSkill = async () => {
+    if (!newSkill.title) return
+    try {
+      if (skillType === "offered") {
+        await api.offeredSkills.create(newSkill)
+      } else {
+        await api.requestedSkills.create(newSkill)
+      }
+      setNewSkill({ title: "", categories: [""], description: "" })
       setShowAddSkill(false)
+      loadProfile()
+    } catch (e: any) {
+      alert(e?.message || 'Failed to add skill')
     }
   }
 
-  const handleDeleteSkill = (skillId: number, type: "offered" | "requested") => {
-    const updatedProfile = { ...profile }
-    if (type === "offered") {
-      updatedProfile.offeredSkills = updatedProfile.offeredSkills.filter((s) => s.id !== skillId)
-    } else {
-      updatedProfile.requestedSkills = updatedProfile.requestedSkills.filter((s) => s.id !== skillId)
+  const handleDeleteSkill = async (skillId: string, type: "offered" | "requested") => {
+    try {
+      if (type === "offered") {
+        await api.offeredSkills.delete(skillId)
+      } else {
+        await api.requestedSkills.delete(skillId)
+      }
+      loadProfile()
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete skill')
     }
-    setProfile(updatedProfile)
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-foreground/60">Please log in to view your profile.</p>
+      </div>
+    )
   }
 
   return (
@@ -95,8 +123,8 @@ export default function ProfilePage() {
             <div className="flex items-center gap-6">
               <div className="relative">
                 <img
-                  src={profile.avatar || "/placeholder.svg"}
-                  alt={profile.name}
+                  src={user.avatarUrl || "/placeholder.svg"}
+                  alt={user.name}
                   className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-primary/20"
                 />
                 <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-2">
@@ -105,18 +133,18 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-2">
-                <h1 className="text-2xl md:text-3xl font-bold text-foreground">{profile.name}</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-foreground">{user.name}</h1>
                 <div className="flex items-center gap-2 text-amber-500">
                   <div className="flex">
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-4 h-4 ${i < Math.floor(profile.rating) ? "fill-current" : "fill-foreground/20"}`}
+                        className={`w-4 h-4 ${i < Math.floor(user.averageRating || 0) ? "fill-current" : "fill-foreground/20"}`}
                       />
                     ))}
                   </div>
                   <span className="text-sm font-semibold text-foreground">
-                    {profile.rating} ({profile.reviews} reviews)
+                    {(user.averageRating || 0).toFixed(1)} ({user.reviewsCount || 0} reviews)
                   </span>
                 </div>
               </div>
@@ -125,7 +153,7 @@ export default function ProfilePage() {
             <Button
               onClick={() => {
                 setIsEditing(!isEditing)
-                setEditData(profile)
+                setEditData({ bio: user.bio || '', location: user.location || '' })
               }}
               variant={isEditing ? "default" : "outline"}
               className="rounded-full"
@@ -138,30 +166,6 @@ export default function ProfilePage() {
           {isEditing ? (
             <div className="mt-8 space-y-4 border-t border-border pt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Name</label>
-                  <Input
-                    value={editData.name}
-                    onChange={(e) => handleEditChange("name", e.target.value)}
-                    className="rounded-lg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Email</label>
-                  <Input
-                    value={editData.email}
-                    onChange={(e) => handleEditChange("email", e.target.value)}
-                    className="rounded-lg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Phone</label>
-                  <Input
-                    value={editData.phone}
-                    onChange={(e) => handleEditChange("phone", e.target.value)}
-                    className="rounded-lg"
-                  />
-                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Location</label>
                   <Input
@@ -186,19 +190,15 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="mt-6 border-t border-border pt-6 space-y-4">
-              <p className="text-foreground/80">{profile.bio}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <p className="text-foreground/80">{user.bio || 'No bio yet.'}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-center gap-2 text-foreground/70">
                   <MapPin className="w-4 h-4 text-primary" />
-                  <span className="text-sm">{profile.location}</span>
+                  <span className="text-sm">{user.location || 'Not set'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-foreground/70">
                   <Mail className="w-4 h-4 text-primary" />
-                  <span className="text-sm">{profile.email}</span>
-                </div>
-                <div className="flex items-center gap-2 text-foreground/70">
-                  <Phone className="w-4 h-4 text-primary" />
-                  <span className="text-sm">{profile.phone}</span>
+                  <span className="text-sm">{user.email}</span>
                 </div>
               </div>
             </div>
@@ -215,7 +215,7 @@ export default function ProfilePage() {
                 onClick={() => {
                   setShowAddSkill(true)
                   setSkillType("offered")
-                  setNewSkill({ title: "", category: "", level: "beginner" })
+                  setNewSkill({ title: "", categories: [""], description: "" })
                 }}
                 variant="outline"
                 size="sm"
@@ -226,24 +226,25 @@ export default function ProfilePage() {
               </Button>
             </div>
 
-            {profile.offeredSkills.length > 0 ? (
+            {loading ? (
+              <p className="text-foreground/50 text-center py-8">Loading...</p>
+            ) : offeredSkills.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {profile.offeredSkills.map((skill) => (
+                {offeredSkills.map((skill) => (
                   <div
-                    key={skill.id}
+                    key={skill._id}
                     className="flex items-center justify-between p-4 rounded-lg bg-background border border-border hover:border-primary/50 transition-colors"
                   >
                     <div>
                       <p className="font-semibold text-foreground">{skill.title}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs font-medium text-primary">{skill.category}</span>
-                        <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary capitalize">
-                          {skill.level}
-                        </span>
+                        {skill.categories?.map((c, i) => (
+                          <span key={i} className="text-xs font-medium text-primary">{c}</span>
+                        ))}
                       </div>
                     </div>
                     <Button
-                      onClick={() => handleDeleteSkill(skill.id, "offered")}
+                      onClick={() => handleDeleteSkill(skill._id, "offered")}
                       variant="ghost"
                       size="sm"
                       className="rounded-full"
@@ -266,7 +267,7 @@ export default function ProfilePage() {
                 onClick={() => {
                   setShowAddSkill(true)
                   setSkillType("requested")
-                  setNewSkill({ title: "", category: "", level: "beginner" })
+                  setNewSkill({ title: "", categories: [""], description: "" })
                 }}
                 variant="outline"
                 size="sm"
@@ -277,24 +278,25 @@ export default function ProfilePage() {
               </Button>
             </div>
 
-            {profile.requestedSkills.length > 0 ? (
+            {loading ? (
+              <p className="text-foreground/50 text-center py-8">Loading...</p>
+            ) : requestedSkills.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {profile.requestedSkills.map((skill) => (
+                {requestedSkills.map((skill) => (
                   <div
-                    key={skill.id}
+                    key={skill._id}
                     className="flex items-center justify-between p-4 rounded-lg bg-background border border-border hover:border-secondary/50 transition-colors"
                   >
                     <div>
                       <p className="font-semibold text-foreground">{skill.title}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs font-medium text-secondary">{skill.category}</span>
-                        <span className="text-xs px-2 py-1 rounded-full bg-secondary/10 text-secondary capitalize">
-                          {skill.level}
-                        </span>
+                        {skill.categories?.map((c, i) => (
+                          <span key={i} className="text-xs font-medium text-secondary">{c}</span>
+                        ))}
                       </div>
                     </div>
                     <Button
-                      onClick={() => handleDeleteSkill(skill.id, "requested")}
+                      onClick={() => handleDeleteSkill(skill._id, "requested")}
                       variant="ghost"
                       size="sm"
                       className="rounded-full"
@@ -337,32 +339,26 @@ export default function ProfilePage() {
                 <div>
                   <label className="text-sm font-semibold text-foreground">Category</label>
                   <select
-                    value={newSkill.category}
-                    onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground mt-1"
+                    value={newSkill.categories[0] || ''}
+                    onChange={(e) => setNewSkill({ ...newSkill, categories: [e.target.value] })}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground mt-1 focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="">Select category</option>
-                    <option value="Programming">Programming</option>
-                    <option value="Design">Design</option>
-                    <option value="Creative">Creative</option>
-                    <option value="Languages">Languages</option>
-                    <option value="Music">Music</option>
-                    <option value="Business">Business</option>
-                    <option value="Health">Health</option>
+                    <option value="">Select a category</option>
+                    {availableCategories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-foreground">Level</label>
-                  <select
-                    value={newSkill.level}
-                    onChange={(e) => setNewSkill({ ...newSkill, level: e.target.value as any })}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground mt-1"
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
+                  <label className="text-sm font-semibold text-foreground">Description (optional)</label>
+                  <textarea
+                    placeholder="Describe the skill..."
+                    value={newSkill.description}
+                    onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary mt-1"
+                  />
                 </div>
               </div>
 

@@ -2,10 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Moon, Sun, LogOut } from "lucide-react"
+import { Menu, Moon, Sun, LogOut, Bell, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { useAuth } from "@/context/AuthContext"
+import { api } from "@/lib/api"
 
 interface NavbarProps {
   darkMode: boolean
@@ -15,12 +17,48 @@ interface NavbarProps {
 export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const { isAuthenticated, user, logout, ready } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadUnreadCount()
+      loadNotifications()
+      // Poll every 30 seconds
+      const interval = setInterval(() => {
+        loadUnreadCount()
+        loadNotifications()
+      }, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [isAuthenticated])
+
+  const loadUnreadCount = async () => {
+    try {
+      const res = await api.messages.unreadCount()
+      setUnreadCount(res.count || 0)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const loadNotifications = async () => {
+    try {
+      const res = await api.notifications.list({ page: 1, limit: 5 })
+      setNotifications(res.items || [])
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const links = [
     { href: "/", label: "Home" },
     { href: "/explore", label: "Explore" },
-    { href: "/chat", label: "Chat" },
+    { href: "/find-matches", label: "Find Matches" },
+    { href: "/exchanges", label: "Exchanges" },
     { href: "/profile", label: "Profile" },
   ]
 
@@ -90,6 +128,71 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <>
+                {/* Messages Icon with Badge */}
+                <Link href="/messages">
+                  <Button variant="ghost" size="icon" className="rounded-full relative">
+                    <MessageCircle className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
+
+                {/* Notifications Icon with Dropdown */}
+                <div className="relative">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="rounded-full"
+                    onClick={() => setNotificationsOpen(!notificationsOpen)}
+                  >
+                    <Bell className="h-5 w-5" />
+                    {notifications.filter(n => !n.read).length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {notifications.filter(n => !n.read).length}
+                      </span>
+                    )}
+                  </Button>
+
+                  {notificationsOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-lg p-4 z-50">
+                      <h3 className="font-bold mb-3">Notifications</h3>
+                      {notifications.length === 0 ? (
+                        <p className="text-sm text-foreground/60">No notifications</p>
+                      ) : (
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {notifications.map((notif) => (
+                            <div
+                              key={notif._id}
+                              className={`p-3 rounded-lg text-sm ${
+                                notif.read ? 'bg-background/50' : 'bg-primary/10'
+                              }`}
+                              onClick={async () => {
+                                if (!notif.read) {
+                                  await api.notifications.markRead(notif._id)
+                                  loadNotifications()
+                                }
+                              }}
+                            >
+                              <p className="font-semibold">{notif.title}</p>
+                              <p className="text-foreground/70">{notif.body}</p>
+                              <p className="text-xs text-foreground/50 mt-1">
+                                {new Date(notif.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
             <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
               <Button
                 variant="ghost"
@@ -110,16 +213,20 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
               </Button>
             </motion.div>
 
-            {isAuthenticated ? (
+            {ready && isAuthenticated ? (
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsAuthenticated(false)}
-                  className="rounded-full transition-all duration-200"
-                >
-                  <LogOut className="h-5 w-5" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-foreground/80 hidden sm:inline">{user?.name || user?.email}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => logout()}
+                    className="rounded-full transition-all duration-200"
+                    title="Logout"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </Button>
+                </div>
               </motion.div>
             ) : (
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
