@@ -16,7 +16,11 @@ const offeredSkillSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-offeredSkillSchema.index({ title: 'text', description: 'text', tags: 1, categories: 1 });
+// Text search index - only for text fields
+offeredSkillSchema.index({ title: 'text', description: 'text' });
+// Regular indexes for filtering
+offeredSkillSchema.index({ categories: 1 });
+offeredSkillSchema.index({ tags: 1 });
 offeredSkillSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('OfferedSkill', offeredSkillSchema);

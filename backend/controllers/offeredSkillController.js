@@ -1,5 +1,7 @@
 const OfferedSkill = require('../models/OfferedSkill');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { normalizeCategories } = require('../constants/categories');
+const { normalizeSkillTitle, normalizeTags } = require('../utils/normalizeSkill');
 
 exports.listOffered = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, q = '', userId, category } = req.query;
@@ -42,7 +44,13 @@ exports.getOffered = asyncHandler(async (req, res) => {
 });
 
 exports.createOffered = asyncHandler(async (req, res) => {
-  const payload = { ...req.body, user: req.user._id };
+  // Normalize inputs to prevent duplicates from different spellings/caps
+  const normalized = { ...req.body };
+  if (normalized.title) normalized.title = normalizeSkillTitle(normalized.title);
+  if (normalized.categories) normalized.categories = normalizeCategories(normalized.categories);
+  if (normalized.tags) normalized.tags = normalizeTags(normalized.tags);
+  
+  const payload = { ...normalized, user: req.user._id };
   const created = await OfferedSkill.create(payload);
   const redis = req.app.get('redis');
   if (redis) await redis.incr('offered:ver');
@@ -55,7 +63,14 @@ exports.updateOffered = asyncHandler(async (req, res) => {
   if (String(item.user) !== String(req.user._id)) {
     return res.status(403).json({ message: 'Forbidden' });
   }
-  Object.assign(item, req.body);
+  
+  // Normalize inputs to prevent duplicates from different spellings/caps
+  const normalized = { ...req.body };
+  if (normalized.title) normalized.title = normalizeSkillTitle(normalized.title);
+  if (normalized.categories) normalized.categories = normalizeCategories(normalized.categories);
+  if (normalized.tags) normalized.tags = normalizeTags(normalized.tags);
+  
+  Object.assign(item, normalized);
   await item.save();
   const redis = req.app.get('redis');
   if (redis) await redis.incr('offered:ver');

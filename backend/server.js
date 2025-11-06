@@ -14,12 +14,15 @@ const { getCorsOptions } = require('./config/cors');
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
 const offeredSkillRoutes = require('./routes/offeredSkillRoutes');
 const requestedSkillRoutes = require('./routes/requestedSkillRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const matchRoutes = require('./routes/matchRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -72,12 +75,15 @@ app.get('/api/health', (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/offered-skills', offeredSkillRoutes);
 app.use('/api/requested-skills', requestedSkillRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/exchanges', exchangeRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/matches', matchRoutes);
 
 // 404 and error handler
 app.use(notFound);

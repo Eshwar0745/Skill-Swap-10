@@ -1,8 +1,13 @@
-const Redis = require('ioredis');
-
 function createRedisClient() {
   const url = process.env.REDIS_URL;
   if (!url) return null;
+  let Redis;
+  try {
+    Redis = require('ioredis');
+  } catch (e) {
+    console.warn('ioredis is not installed; skipping Redis integration');
+    return null;
+  }
   const client = new Redis(url, {
     maxRetriesPerRequest: 3,
     enableAutoPipelining: true,

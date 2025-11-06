@@ -7,6 +7,7 @@ const {
   getThread,
   markThreadRead,
   unreadCount,
+  getConnections,
 } = require('../controllers/messageController');
 
 router.post(
@@ -20,6 +21,7 @@ router.post(
   validate,
   sendMessage
 );
+router.get('/connections', auth, getConnections);
 router.get('/thread/:userId', auth, [param('userId').isMongoId()], validate, getThread);
 router.post('/thread/:userId/read', auth, [param('userId').isMongoId()], validate, markThreadRead);
 router.get('/unread-count', auth, unreadCount);
