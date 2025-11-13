@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation"
 import { CheckCircle, XCircle, Clock, Calendar, User } from "lucide-react"
 
 export default function ExchangesPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const [exchanges, setExchanges] = useState<any[]>([])
   const [filter, setFilter] = useState<'all' | 'requester' | 'provider'>('all')
@@ -16,12 +16,13 @@ export default function ExchangesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!ready) return // Wait for auth to hydrate
     if (!isAuthenticated) {
       router.push('/login')
       return
     }
     loadExchanges()
-  }, [isAuthenticated, filter, statusFilter])
+  }, [ready, isAuthenticated, filter, statusFilter])
 
   const loadExchanges = async () => {
     setLoading(true)
@@ -54,6 +55,14 @@ export default function ExchangesPage() {
 
   const handleReview = (userId: string) => {
     router.push(`/reviews/create?userId=${userId}`)
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {

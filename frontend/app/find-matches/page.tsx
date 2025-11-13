@@ -8,18 +8,19 @@ import { useRouter } from "next/navigation"
 import { Star, Sparkles, Users, ArrowRight } from "lucide-react"
 
 export default function FindMatchesPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const [matches, setMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!ready) return
     if (!isAuthenticated) {
       router.push('/login')
       return
     }
     loadMatches()
-  }, [isAuthenticated])
+  }, [ready, isAuthenticated])
 
   const loadMatches = async () => {
     setLoading(true)
@@ -46,6 +47,14 @@ export default function FindMatchesPage() {
     } catch (e: any) {
       alert(e?.message || 'Failed to send request')
     }
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {

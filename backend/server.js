@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const http = require('http');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -67,6 +68,9 @@ app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 app.use(cors(getCorsOptions()));
 app.use('/api', apiLimiter);
+
+// Static serving for uploaded assets (avatars, etc.)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {

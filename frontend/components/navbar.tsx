@@ -151,16 +151,33 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
                     onClick={() => setNotificationsOpen(!notificationsOpen)}
                   >
                     <Bell className="h-5 w-5" />
-                    {notifications.filter(n => !n.read).length > 0 && (
+                    {notifications.filter(n => !n.readAt).length > 0 && (
                       <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                        {notifications.filter(n => !n.read).length}
+                        {notifications.filter(n => !n.readAt).length}
                       </span>
                     )}
                   </Button>
 
                   {notificationsOpen && (
                     <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-lg p-4 z-50">
-                      <h3 className="font-bold mb-3">Notifications</h3>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold">Notifications</h3>
+                        {notifications.some(n => !n.readAt) && (
+                          <button
+                            className="text-xs text-primary hover:underline"
+                            onClick={async () => {
+                              try {
+                                await api.notifications.markAllRead()
+                                loadNotifications()
+                              } catch (e) {
+                                console.error(e)
+                              }
+                            }}
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+                      </div>
                       {notifications.length === 0 ? (
                         <p className="text-sm text-foreground/60">No notifications</p>
                       ) : (
@@ -169,10 +186,10 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
                             <div
                               key={notif._id}
                               className={`p-3 rounded-lg text-sm ${
-                                notif.read ? 'bg-background/50' : 'bg-primary/10'
+                                notif.readAt ? 'bg-background/50' : 'bg-primary/10'
                               }`}
                               onClick={async () => {
-                                if (!notif.read) {
+                                if (!notif.readAt) {
                                   await api.notifications.markRead(notif._id)
                                   loadNotifications()
                                 }

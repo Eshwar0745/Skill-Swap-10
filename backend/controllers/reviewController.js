@@ -1,5 +1,6 @@
 const Review = require('../models/Review');
 const User = require('../models/User');
+const Exchange = require('../models/Exchange');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 async function recomputeUserRating(userId) {
@@ -10,6 +11,19 @@ async function recomputeUserRating(userId) {
   const avg = agg[0]?.avg || 0;
   const count = agg[0]?.count || 0;
   await User.findByIdAndUpdate(userId, { averageRating: avg, reviewsCount: count });
+}
+
+async function recomputeBadges(userId) {
+  const user = await User.findById(userId).lean();
+  if (!user) return;
+  const completed = await Exchange.countDocuments({ $or: [{ requester: userId }, { provider: userId }], status: 'completed' });
+  const badges = new Set(user.badges || []);
+  if (completed >= 1) badges.add('First Swap');
+  if (completed >= 5) badges.add('Skilled Mentor');
+  if (completed >= 10) badges.add('Master Mentor');
+  if ((user.averageRating || 0) >= 4.0 && (user.reviewsCount || 0) >= 5) badges.add('Rising Star');
+  if ((user.averageRating || 0) >= 4.5 && (user.reviewsCount || 0) >= 10) badges.add('Top Rated');
+  await User.findByIdAndUpdate(userId, { $set: { badges: Array.from(badges) } });
 }
 
 exports.createReview = asyncHandler(async (req, res) => {
@@ -29,6 +43,7 @@ exports.createReview = asyncHandler(async (req, res) => {
     skillId,
   });
   await recomputeUserRating(revieweeId);
+  await recomputeBadges(revieweeId);
   res.status(201).json(review);
 });
 
@@ -57,6 +72,7 @@ exports.updateReview = asyncHandler(async (req, res) => {
   if (req.body.comment !== undefined) review.comment = req.body.comment;
   await review.save();
   await recomputeUserRating(review.reviewee);
+  await recomputeBadges(review.reviewee);
   res.json(review);
 });
 
@@ -69,5 +85,6 @@ exports.deleteReview = asyncHandler(async (req, res) => {
   const reviewee = review.reviewee;
   await review.deleteOne();
   await recomputeUserRating(reviewee);
+  await recomputeBadges(reviewee);
   res.json({ message: 'Deleted' });
 });

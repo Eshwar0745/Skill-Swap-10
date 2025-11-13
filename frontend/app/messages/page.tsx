@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Send, Users, MessageCircle } from "lucide-react"
 
 export default function MessagesPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const [connections, setConnections] = useState<any[]>([])
   const [selectedUser, setSelectedUser] = useState<any>(null)
@@ -19,12 +19,13 @@ export default function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!ready) return
     if (!isAuthenticated) {
       router.push('/login')
       return
     }
     loadConnections()
-  }, [isAuthenticated])
+  }, [ready, isAuthenticated])
 
   const loadConnections = async () => {
     try {

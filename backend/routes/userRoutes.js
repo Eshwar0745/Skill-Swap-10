@@ -6,7 +6,9 @@ const {
   getUserProfile,
   updateUserProfile,
   getMe,
+  uploadAvatar,
 } = require('../controllers/userController');
+const { uploadAvatar: avatarMulter } = require('../middleware/upload');
 
 // Get current user profile
 router.get('/me', auth, getMe);
@@ -27,6 +29,16 @@ router.put(
   ],
   validate,
   updateUserProfile
+);
+
+// Upload avatar
+router.post(
+  '/:id/avatar',
+  auth,
+  [param('id').isMongoId()],
+  validate,
+  avatarMulter.single('avatar'),
+  uploadAvatar
 );
 
 module.exports = router;

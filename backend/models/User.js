@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
     bio: { type: String, default: '' },
     location: { type: String, default: '' },
     avatarUrl: { type: String, default: '' },
+    badges: { type: [String], default: [] },
     averageRating: { type: Number, default: 0 },
     reviewsCount: { type: Number, default: 0 },
     tokenVersion: { type: Number, default: 0 },

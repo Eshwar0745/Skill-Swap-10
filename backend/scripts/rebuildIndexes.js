@@ -33,7 +33,8 @@ async function rebuildIndexes() {
     }
     
     // Create new indexes
-    await db.collection('offeredskills').createIndex({ title: 'text', description: 'text' });
+  await db.collection('offeredskills').createIndex({ title: 'text', description: 'text' });
+  await db.collection('offeredskills').createIndex({ title: 1 });
     await db.collection('offeredskills').createIndex({ categories: 1 });
     await db.collection('offeredskills').createIndex({ tags: 1 });
     await db.collection('offeredskills').createIndex({ user: 1, createdAt: -1 });
@@ -49,7 +50,8 @@ async function rebuildIndexes() {
     }
     
     // Create new indexes
-    await db.collection('requestedskills').createIndex({ title: 'text', description: 'text' });
+  await db.collection('requestedskills').createIndex({ title: 'text', description: 'text' });
+  await db.collection('requestedskills').createIndex({ title: 1 });
     await db.collection('requestedskills').createIndex({ categories: 1 });
     await db.collection('requestedskills').createIndex({ tags: 1 });
     await db.collection('requestedskills').createIndex({ user: 1, createdAt: -1 });

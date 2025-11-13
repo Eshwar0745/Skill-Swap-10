@@ -1,6 +1,8 @@
 const Message = require('../models/Message');
 const Notification = require('../models/Notification');
 const Exchange = require('../models/Exchange');
+const User = require('../models/User');
+const { sendMail } = require('../services/mailer');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.sendMessage = asyncHandler(async (req, res) => {
@@ -57,6 +59,13 @@ exports.sendMessage = asyncHandler(async (req, res) => {
       body: content.slice(0, 140),
       data: { sender: req.user._id, messageId: msg._id },
     });
+    // Optional email notification
+    try {
+      const toUser = await User.findById(recipientId).lean();
+      if (toUser?.email) {
+        await sendMail(toUser.email, 'New message on SkillSwap', `<p>You have a new message.</p><p>"${content.slice(0,200)}"</p>`);
+      }
+    } catch (_) {}
   } catch (_) {}
 
   res.status(201).json(msg);

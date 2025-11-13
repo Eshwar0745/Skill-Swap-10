@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Star, ArrowLeft } from "lucide-react"
 
 export default function CreateReviewPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const revieweeId = searchParams?.get('userId')
@@ -19,6 +19,7 @@ export default function CreateReviewPage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    if (!ready) return
     if (!isAuthenticated) {
       router.push('/login')
       return
@@ -27,7 +28,7 @@ export default function CreateReviewPage() {
       router.push('/exchanges')
       return
     }
-  }, [isAuthenticated, revieweeId])
+  }, [ready, isAuthenticated, revieweeId])
 
   const handleSubmit = async () => {
     if (!revieweeId || rating === 0) {
@@ -50,6 +51,14 @@ export default function CreateReviewPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {

@@ -1,6 +1,23 @@
 const Exchange = require('../models/Exchange');
 const Notification = require('../models/Notification');
 const { asyncHandler } = require('../utils/asyncHandler');
+const User = require('../models/User');
+const { sendMail } = require('../services/mailer');
+
+async function computeBadgesForUser(userId) {
+  // Count completed exchanges
+  const completedAsRequester = await Exchange.countDocuments({ requester: userId, status: 'completed' });
+  const completedAsProvider = await Exchange.countDocuments({ provider: userId, status: 'completed' });
+  const totalCompleted = completedAsRequester + completedAsProvider;
+  const user = await User.findById(userId).lean();
+  const badges = new Set(user?.badges || []);
+  if (totalCompleted >= 1) badges.add('First Swap');
+  if (totalCompleted >= 5) badges.add('Skilled Mentor');
+  if (totalCompleted >= 10) badges.add('Master Mentor');
+  if ((user?.averageRating || 0) >= 4.0 && (user?.reviewsCount || 0) >= 5) badges.add('Rising Star');
+  if ((user?.averageRating || 0) >= 4.5 && (user?.reviewsCount || 0) >= 10) badges.add('Top Rated');
+  await User.findByIdAndUpdate(userId, { $set: { badges: Array.from(badges) } });
+}
 
 exports.createExchange = asyncHandler(async (req, res) => {
   const { providerId, offeredSkillId, requestedSkillId, scheduledAt, notes } = req.body;
@@ -95,5 +112,16 @@ exports.updateExchangeStatus = asyncHandler(async (req, res) => {
       body: `Status: ${ex.status}`,
       data: { exchangeId: ex._id },
     });
+    // Email notification (if configured)
+    try {
+      await sendMail(String(other.email || ''), 'Exchange updated', `<p>Your exchange status is now <b>${ex.status}</b>.</p>`);
+    } catch (_) {}
+  } catch (_) {}
+
+  // Re-compute badges when completed
+  try {
+    if (ex.status === 'completed') {
+      await Promise.all([computeBadgesForUser(ex.requester), computeBadgesForUser(ex.provider)]);
+    }
   } catch (_) {}
 });

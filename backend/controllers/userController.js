@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { asyncHandler } = require('../utils/asyncHandler');
+const path = require('path');
 
 /**
  * Get user profile by ID
@@ -58,4 +59,24 @@ exports.getMe = asyncHandler(async (req, res) => {
     .lean();
 
   res.json(user);
+});
+
+/**
+ * Upload and set avatar image for current user
+ */
+exports.uploadAvatar = asyncHandler(async (req, res) => {
+  const userId = req.params.id;
+  if (String(req.user._id) !== String(userId)) {
+    return res.status(403).json({ message: 'You can only update your own avatar' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+  const relPath = `/uploads/avatars/${req.file.filename}`;
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $set: { avatarUrl: relPath } },
+    { new: true }
+  ).select('-password -tokenVersion');
+  res.json({ avatarUrl: relPath, user });
 });

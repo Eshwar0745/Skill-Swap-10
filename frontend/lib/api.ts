@@ -4,8 +4,9 @@ type JSONValue = Record<string, any> | Array<any> | string | number | boolean | 
 
 async function request<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const isFormData = typeof window !== 'undefined' && init.body instanceof FormData;
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(init.headers || {}),
   };
   if (token) (headers as any).Authorization = `Bearer ${token}`;
@@ -50,6 +51,11 @@ export const api = {
     getProfile: (id: string) => request<any>(`/api/users/${id}`),
     updateProfile: (id: string, data: { name?: string; bio?: string; location?: string; avatarUrl?: string }) =>
       request<any>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    uploadAvatar: (id: string, file: File) => {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      return request<any>(`/api/users/${id}/avatar`, { method: 'POST', body: fd });
+    },
   },
   offeredSkills: {
     list: (params?: { userId?: string; page?: number; limit?: number }) => {
@@ -118,7 +124,7 @@ export const api = {
     },
     get: (id: string) => request<any>(`/api/exchanges/${id}`),
     updateStatus: (id: string, status: string) =>
-      request<any>(`/api/exchanges/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+      request<any>(`/api/exchanges/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
   },
   notifications: {
     list: (params?: { page?: number; limit?: number }) => {
@@ -128,7 +134,9 @@ export const api = {
       return request<{ items: any[]; total: number }>(`/api/notifications?${sp}`);
     },
     markRead: (id: string) => 
-      request<any>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
+      request<any>(`/api/notifications/${id}/read`, { method: 'POST' }),
+    markAllRead: () =>
+      request<{ updated: number }>(`/api/notifications/mark-all-read`, { method: 'POST' }),
   },
   matches: {
     find: (params: { skillTitle?: string; category?: string }) => {

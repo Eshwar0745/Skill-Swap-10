@@ -19,6 +19,8 @@ const offeredSkillSchema = new mongoose.Schema(
 // Text search index - only for text fields
 offeredSkillSchema.index({ title: 'text', description: 'text' });
 // Regular indexes for filtering
+// Add B-tree index on title so MongoDB can combine $text with other $or clauses (planner requirement)
+offeredSkillSchema.index({ title: 1 });
 offeredSkillSchema.index({ categories: 1 });
 offeredSkillSchema.index({ tags: 1 });
 offeredSkillSchema.index({ user: 1, createdAt: -1 });

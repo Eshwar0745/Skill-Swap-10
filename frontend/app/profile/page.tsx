@@ -16,9 +16,10 @@ interface UserSkill {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, ready } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({ bio: '', location: '' })
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [showAddSkill, setShowAddSkill] = useState(false)
   const [newSkill, setNewSkill] = useState({ title: "", categories: [""], description: "" })
   const [skillType, setSkillType] = useState<"offered" | "requested">("offered")
@@ -29,9 +30,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadCategories()
-    if (!user) return
+    if (!ready || !user) return
     loadProfile()
-  }, [user])
+  }, [ready, user])
 
   const loadCategories = async () => {
     try {
@@ -40,6 +41,21 @@ export default function ProfilePage() {
     } catch (e) {
       console.error(e)
       setAvailableCategories(['Programming', 'Design', 'Language Learning', 'Other'])
+    }
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    try {
+      setUploadingAvatar(true)
+      await api.users.uploadAvatar(user.id, file)
+      // Refresh the page to re-hydrate user avatar from backend
+      window.location.reload()
+    } catch (err: any) {
+      alert(err?.message || 'Failed to upload avatar')
+    } finally {
+      setUploadingAvatar(false)
     }
   }
 
@@ -106,6 +122,14 @@ export default function ProfilePage() {
     }
   }
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+      </div>
+    )
+  }
+
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -125,11 +149,23 @@ export default function ProfilePage() {
                 <img
                   src={user.avatarUrl || "/placeholder.svg"}
                   alt={user.name}
-                  className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-primary/20"
+                  className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-primary/20 object-cover"
                 />
-                <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-2">
+                <label
+                  htmlFor="avatar-input"
+                  title="Change avatar"
+                  className={`absolute -bottom-1 -right-1 bg-primary rounded-full p-2 cursor-pointer ${uploadingAvatar ? 'opacity-50 pointer-events-none' : ''}`}
+                >
                   <Edit2 className="w-4 h-4 text-primary-foreground" />
-                </div>
+                </label>
+                <input
+                  id="avatar-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                  disabled={uploadingAvatar}
+                />
               </div>
 
               <div className="space-y-2">
