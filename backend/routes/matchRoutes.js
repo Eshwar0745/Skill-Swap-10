@@ -4,7 +4,8 @@ const { query } = require('express-validator');
 const { validate } = require('../middleware/validate');
 const {
   findMatchesForRequestedSkill,
-  getMyMatches
+  getMyMatches,
+  getExploreMatches
 } = require('../controllers/matchController');
 
 /**
@@ -28,5 +29,6 @@ router.get(
  * Get all potential matches for current user's wanted skills
  */
 router.get('/my-matches', auth, getMyMatches);
+router.get('/explore', auth, getExploreMatches);
 
 module.exports = router;

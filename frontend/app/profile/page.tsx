@@ -4,9 +4,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit2, Plus, X, Star, MapPin, Mail } from "lucide-react"
+import { Edit2, Plus, X, Star, MapPin, Mail, Users } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface UserSkill {
   _id: string
@@ -60,12 +61,13 @@ export default function ProfilePage() {
   }
 
   const loadProfile = async () => {
-    if (!user?.id) return
+    const userId = user?.id || (user as any)?._id;
+    if (!userId) return
     setLoading(true)
     try {
       const [off, req] = await Promise.all([
-        api.offeredSkills.list({ userId: user.id }),
-        api.requestedSkills.list({ userId: user.id }),
+        api.offeredSkills.list({ userId }),
+        api.requestedSkills.list({ userId }),
       ])
       setOfferedSkills(off.items || [])
       setRequestedSkills(req.items || [])
@@ -140,7 +142,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen py-8 bg-gradient-to-b from-background to-card/30">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Profile Header */}
         <div className="bg-card border border-border rounded-xl p-6 md:p-8 mb-8">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -228,15 +230,31 @@ export default function ProfilePage() {
             <div className="mt-6 border-t border-border pt-6 space-y-4">
               <p className="text-foreground/80">{user.bio || 'No bio yet.'}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2 text-foreground/70">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  <span className="text-sm">{user.location || 'Not set'}</span>
+                  <div className="flex items-center gap-2 text-foreground/70">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="text-sm">{user.location || 'Not set'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-foreground/70">
+                    <Mail className="w-4 h-4 text-primary" />
+                    <span className="text-sm">{user.email}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-foreground/70">
-                  <Mail className="w-4 h-4 text-primary" />
-                  <span className="text-sm">{user.email}</span>
+                {/* Followers Section */}
+                <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border/50">
+                  <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-2 text-primary font-medium">
+                    <Users className="w-5 h-5" />
+                    <div className="flex flex-col">
+                      <span className="text-xl font-bold">{user.followers?.length || 0}</span>
+                      <span className="text-xs text-foreground/60 uppercase tracking-wider">Followers</span>
+                    </div>
+                  </motion.div>
+                  <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-2 text-primary font-medium">
+                    <div className="flex flex-col">
+                      <span className="text-xl font-bold">{user.following?.length || 0}</span>
+                      <span className="text-xs text-foreground/60 uppercase tracking-wider">Following</span>
+                    </div>
+                  </motion.div>
                 </div>
-              </div>
             </div>
           )}
         </div>
@@ -409,7 +427,7 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   )
 }

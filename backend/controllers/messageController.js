@@ -11,7 +11,7 @@ exports.sendMessage = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'recipientId and content are required' });
   }
 
-  // Check if users are connected (have an accepted exchange)
+  // Check if users are connected (have an accepted exchange or prior messages)
   const connection = await Exchange.findOne({
     $or: [
       { requester: req.user._id, provider: recipientId, status: 'accepted' },
@@ -19,9 +19,16 @@ exports.sendMessage = asyncHandler(async (req, res) => {
     ]
   });
 
-  if (!connection) {
-    return res.status(403).json({ 
-      message: 'You can only message users with whom you have an accepted skill exchange' 
+  const pastMessage = await Message.findOne({
+    $or: [
+      { sender: req.user._id, recipient: recipientId },
+      { sender: recipientId, recipient: req.user._id }
+    ]
+  });
+
+  if (!connection && !pastMessage) {
+    return res.status(403).json({
+      message: 'You can only message users with whom you have an accepted skill exchange or prior conversation'
     });
   }
 
@@ -125,35 +132,53 @@ exports.unreadCount = asyncHandler(async (req, res) => {
 exports.getConnections = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   
-  // Find all accepted exchanges
-  const exchanges = await Exchange.find({
-    $or: [
-      { requester: userId, status: 'accepted' },
-      { provider: userId, status: 'accepted' }
-    ]
-  })
-  .populate('requester', 'name email avatarUrl averageRating')
-  .populate('provider', 'name email avatarUrl averageRating')
-  .lean();
+  // 1. Get all unique users from past messages
+  const pastMessages = await Message.find({
+    $or: [{ sender: userId }, { recipient: userId }]
+  }).sort({ createdAt: -1 }).lean();
 
-  // Extract unique connected users
-  const connections = exchanges.map(exchange => {
-    const isRequester = String(exchange.requester._id) === String(userId);
-    const otherUser = isRequester ? exchange.provider : exchange.requester;
-    return {
-      userId: otherUser._id,
-      name: otherUser.name,
-      email: otherUser.email,
-      avatar: otherUser.avatarUrl,
-      rating: otherUser.averageRating,
-      exchangeId: exchange._id
-    };
+  const messagedUserIds = new Set();
+  pastMessages.forEach(msg => {
+    messagedUserIds.add(String(msg.sender) === String(userId) ? String(msg.recipient) : String(msg.sender));
   });
 
-  // Remove duplicates based on userId
-  const uniqueConnections = connections.filter((conn, index, self) =>
-    index === self.findIndex((c) => String(c.userId) === String(conn.userId))
-  );
+  
+  // 2. Find all accepted OR completed exchanges
+  const exchanges = await Exchange.find({
+    $or: [
+      { requester: userId, status: { $in: ['accepted', 'completed'] } },
+      { provider: userId, status: { $in: ['accepted', 'completed'] } }
+    ]
+  }).lean();
 
-  res.json({ connections: uniqueConnections });
+  const exchangeUserIds = new Set();
+  const acceptedUserIds = new Set();
+
+  exchanges.forEach(ex => {
+    const otherId = String(ex.requester) === String(userId) ? String(ex.provider) : String(ex.requester);
+    exchangeUserIds.add(otherId);
+    if (ex.status === 'accepted') {
+      acceptedUserIds.add(otherId);
+    }
+  });
+
+  // Merge them
+  const allUserIds = Array.from(new Set([...messagedUserIds, ...exchangeUserIds]));
+
+  // Populate users
+  const users = await User.find({ _id: { $in: allUserIds } })
+    .select('name email avatarUrl averageRating')
+    .lean();
+
+  const connections = users.map(u => ({
+    userId: u._id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatarUrl,
+    rating: u.averageRating,
+    isReadOnly: !acceptedUserIds.has(String(u._id))
+  }));
+
+  res.json({ connections });
+
 });

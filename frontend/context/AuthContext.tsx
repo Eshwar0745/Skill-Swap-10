@@ -12,6 +12,8 @@ type User = {
   location?: string;
   averageRating?: number;
   reviewsCount?: number;
+  following?: string[];
+  followers?: string[];
 };
 
 type AuthContextValue = {

@@ -154,9 +154,17 @@ export default function ExchangesPage() {
                         </div>
                       </div>
 
+                      {exchange.requestedSkill && (
+                        <div className="text-sm">
+                          <span className="text-foreground/60">Requested: </span>
+                          <span className="font-medium text-foreground">
+                            {exchange.requestedSkill?.title || 'Unknown'}
+                          </span>
+                        </div>
+                      )}
                       {exchange.offeredSkill && (
                         <div className="text-sm">
-                          <span className="text-foreground/60">Skill: </span>
+                          <span className="text-foreground/60">Offered: </span>
                           <span className="font-medium text-foreground">
                             {exchange.offeredSkill?.title || 'Unknown'}
                           </span>

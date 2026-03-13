@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema(
     location: { type: String, default: '' },
     avatarUrl: { type: String, default: '' },
     badges: { type: [String], default: [] },
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     averageRating: { type: Number, default: 0 },
     reviewsCount: { type: Number, default: 0 },
     tokenVersion: { type: Number, default: 0 },

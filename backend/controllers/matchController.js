@@ -189,3 +189,90 @@ exports.getMyMatches = asyncHandler(async (req, res) => {
 });
 
 module.exports = exports;
+
+// ADDED GET EXPLORE MATCHES
+exports.getExploreMatches = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { q, category } = req.query;
+
+  const myRequests = await require('../models/RequestedSkill').find({ user: userId }).lean();
+  const myOffers = await require('../models/OfferedSkill').find({ user: userId }).lean();
+  
+  if (!myRequests.length || !myOffers.length) {
+    return res.json({ items: [] });
+  }
+
+  const myRequestedTitles = myRequests.map(r => r.title.toLowerCase());
+  const myRequestedCategories = Array.from(new Set(myRequests.flatMap(r => r.categories)));
+  const myOfferedTitles = myOffers.map(o => o.title.toLowerCase());
+
+  const eligibleWants = await require('../models/RequestedSkill').find({
+    user: { $ne: userId }
+  }).lean();
+
+  const providerIdsWhoWantMySkills = new Set();
+  const providerWantsMap = new Map();
+  
+  for (const wanted of eligibleWants) {
+    const wantTitle = wanted.title.toLowerCase();
+    const isWanted = myOfferedTitles.some(my => wantTitle.includes(my) || my.includes(wantTitle));
+    if (isWanted) {
+      providerIdsWhoWantMySkills.add(String(wanted.user));
+      if (!providerWantsMap.has(String(wanted.user))) {
+        providerWantsMap.set(String(wanted.user), []);
+      }
+      providerWantsMap.get(String(wanted.user)).push(wanted.title);
+    }
+  }
+
+  if (providerIdsWhoWantMySkills.size === 0) {
+    return res.json({ items: [] });
+  }
+
+  let providerFilter = { user: { $in: Array.from(providerIdsWhoWantMySkills) } };
+  
+  if (q) {
+    providerFilter.$or = [
+      { title: new RegExp(q, 'i') },
+      { $text: { $search: q } }
+    ];
+  }
+  if (category && category !== 'All') {
+    providerFilter.categories = category;
+  }
+
+  const eligibleOffers = await require('../models/OfferedSkill').find(providerFilter)
+    .populate('user', 'name email avatarUrl location averageRating reviewsCount')
+    .lean();
+
+  const items = [];
+  for (const offer of eligibleOffers) {
+    const offerTitle = offer.title.toLowerCase();
+    const matchesMyWant = myRequestedTitles.some(w => offerTitle.includes(w) || w.includes(offerTitle)) ||
+                          (offer.categories && offer.categories.some(c => myRequestedCategories.includes(c)));
+                          
+    if (!matchesMyWant) continue;
+
+    const providerId = String(offer.user._id);
+    const whatTheyWant = providerWantsMap.get(providerId);
+
+    items.push({
+      _id: offer._id,
+      title: offer.title,
+      category: offer.categories?.[0] || 'Other',
+      location: offer.location,
+      user: {
+        id: offer.user._id,
+        name: offer.user.name,
+        avatar: offer.user.avatarUrl,
+        averageRating: offer.user.averageRating
+      },
+      image: offer.imageUrl,
+      description: offer.description,
+      isMutual: true,
+      whatTheyWant: Array.from(new Set(whatTheyWant))[0]
+    });
+  }
+
+  res.json({ items });
+});

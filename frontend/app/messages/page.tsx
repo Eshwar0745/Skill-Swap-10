@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Send, Users, MessageCircle } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Send, Users } from "lucide-react"
+import { io, Socket } from "socket.io-client"
 
 export default function MessagesPage() {
-  const { user, isAuthenticated, ready } = useAuth()
+  const { user, isAuthenticated, ready, token } = useAuth()
   const router = useRouter()
   const [connections, setConnections] = useState<any[]>([])
   const [selectedUser, setSelectedUser] = useState<any>(null)
@@ -17,6 +18,13 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<Socket | null>(null)
+  const selectedUserRef = useRef<any>(null)
+
+  // Keep ref in sync
+  useEffect(() => {
+    selectedUserRef.current = selectedUser
+  }, [selectedUser])
 
   useEffect(() => {
     if (!ready) return
@@ -25,7 +33,46 @@ export default function MessagesPage() {
       return
     }
     loadConnections()
-  }, [ready, isAuthenticated])
+
+    // Initialize Socket.io
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+    const socket = io(backendUrl, {
+      auth: { token }
+    })
+    
+    socket.on('connect', () => {
+      console.log('Socket.io connected')
+    })
+    
+    socket.on('message:new', (msg) => {
+      loadConnections()
+      
+      setMessages((prev) => {
+        const currentSelectedUser = selectedUserRef.current
+        // Only append if the message is part of the currently active thread
+        if (currentSelectedUser && (String(msg.sender) === String(currentSelectedUser.userId) || String(msg.recipient) === String(currentSelectedUser.userId))) {
+           // Also mark it as read immediately if it's from them
+           if (String(msg.sender) === String(currentSelectedUser.userId)) {
+             api.messages.markRead(currentSelectedUser.userId).catch(console.error)
+           }
+           // avoid duplicates if we just sent it (though we append locally first, so we should check ID)
+           if (prev.some(m => m._id === msg._id)) return prev;
+           return [...prev, msg]
+        }
+        return prev
+      })
+    })
+
+    socketRef.current = socket
+
+    return () => {
+      socket.disconnect()
+    }
+  }, [ready, isAuthenticated, token])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   const loadConnections = async () => {
     try {
@@ -123,18 +170,24 @@ export default function MessagesPage() {
                 })}
                 <div ref={messagesEndRef} />
               </div>
-              <div className="p-4 border-t flex gap-2">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Type a message..."
-                />
-                <Button onClick={handleSend}>
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
-            </>
+              {selectedUser.isReadOnly ? (
+                <div className="p-4 border-t text-center text-sm text-amber-600 bg-amber-50 rounded-b-xl border-amber-200">
+                  This exchange is completed. Chat is locked (read-only mode).
+                </div>
+              ) : (
+                <div className="p-4 border-t flex gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="Type a message..."
+                  />
+                  <Button onClick={handleSend}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+              </>
           )}
         </div>
       </div>

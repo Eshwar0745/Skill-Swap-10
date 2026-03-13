@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
-import { MessageCircle, HandshakeIcon } from "lucide-react"
-import { useState } from "react"
+import { MessageCircle, HandshakeIcon, UserPlus, UserMinus } from "lucide-react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
@@ -17,16 +17,47 @@ interface Skill {
   description?: string
   _id?: string
   userId?: string
+  isMutual?: boolean
 }
 
 export default function SkillCard({ skill }: { skill: Skill }) {
   const [isHovered, setIsHovered] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
   const { user, isAuthenticated } = useAuth()
   const router = useRouter()
 
   const skillId = skill._id || skill.id
   const ownerId = skill.userId || skill.user?.id
+
+  useEffect(() => {
+    if (user?.following && ownerId) {
+      setIsFollowing(user.following.includes(String(ownerId)));
+    }
+  }, [user, ownerId]);
+
+  const handleFollowToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await api.users.unfollow(String(ownerId));
+        setIsFollowing(false);
+      } else {
+        await api.users.follow(String(ownerId));
+        setIsFollowing(true);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update follow status');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleRequestExchange = async () => {
     if (!isAuthenticated) {
@@ -88,6 +119,11 @@ export default function SkillCard({ skill }: { skill: Skill }) {
           animate={{ opacity: isHovered ? 1 : 0 }}
           transition={{ duration: 0.3 }}
         />
+        {skill.isMutual && (
+          <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1 z-10">
+            <span>🤝 Mutual Match</span>
+          </div>
+        )}
       </div>
 
       <div className="p-4 space-y-3">
@@ -129,7 +165,7 @@ export default function SkillCard({ skill }: { skill: Skill }) {
               {loading ? 'Sending...' : 'Request Swap'}
             </Button>
           </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+<motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
               size="sm"
               variant="outline"
@@ -138,6 +174,18 @@ export default function SkillCard({ skill }: { skill: Skill }) {
               disabled={String(ownerId) === String(user?.id)}
             >
               <MessageCircle className="w-4 h-4" />
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              variant={isFollowing ? "secondary" : "outline"}
+              className="rounded-full px-3"
+              onClick={handleFollowToggle}
+              disabled={followLoading || String(ownerId) === String(user?.id)}
+              title={isFollowing ? "Unfollow" : "Follow"}
+            >
+              {isFollowing ? <UserMinus className="w-4 h-4 text-primary" /> : <UserPlus className="w-4 h-4" />}
             </Button>
           </motion.div>
         </div>

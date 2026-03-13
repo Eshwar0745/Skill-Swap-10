@@ -56,6 +56,8 @@ export const api = {
       fd.append('avatar', file);
       return request<any>(`/api/users/${id}/avatar`, { method: 'POST', body: fd });
     },
+    follow: (id: string) => request<any>(`/api/users/${id}/follow`, { method: 'POST' }),
+    unfollow: (id: string) => request<any>(`/api/users/${id}/follow`, { method: 'DELETE' }),
   },
   offeredSkills: {
     list: (params?: { userId?: string; page?: number; limit?: number }) => {

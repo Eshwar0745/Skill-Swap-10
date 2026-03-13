@@ -85,7 +85,9 @@ exports.login = asyncHandler(async (req, res) => {
 
 exports.me = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select('-passwordHash');
-  res.json({ user });
+  const userObj = user.toObject();
+  userObj.id = userObj._id;
+  res.json({ user: userObj });
 });
 
 exports.refresh = asyncHandler(async (req, res) => {

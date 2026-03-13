@@ -7,6 +7,8 @@ const {
   updateUserProfile,
   getMe,
   uploadAvatar,
+  followUser,
+  unfollowUser
 } = require('../controllers/userController');
 const { uploadAvatar: avatarMulter } = require('../middleware/upload');
 
@@ -14,9 +16,13 @@ const { uploadAvatar: avatarMulter } = require('../middleware/upload');
 router.get('/me', auth, getMe);
 
 // Get user profile by ID
-router.get('/:id', [param('id').isMongoId()], validate, getUserProfile);
+router.get('/:id', [param('id').isMongoId()], validate, getUserProfile);        
 
 // Update user profile
+
+router.post('/:id/follow', auth, followUser);
+router.delete('/:id/follow', auth, unfollowUser);
+
 router.put(
   '/:id',
   auth,

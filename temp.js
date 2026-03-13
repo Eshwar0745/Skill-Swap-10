@@ -1,29 +1,8 @@
-const http = require('http');
-
-const req = http.request({
-  hostname: 'localhost',
-  port: 4000,
-  path: '/api/auth/login',
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' }
-}, res => {
-  let data = '';
-  res.on('data', chunk => data += chunk);
-  res.on('end', () => {
-    const token = JSON.parse(data).token;
-    const getReq = http.request({
-      hostname: 'localhost',
-      port: 4000,
-      path: '/api/messages/connections',
-      headers: { Authorization: 'Bearer ' + token }
-    }, gRes => {
-      let gData = '';
-      gRes.on('data', chunk => gData += chunk);
-      gRes.on('end', () => console.log(JSON.stringify(JSON.parse(gData), null, 2)));
-    });
-    getReq.end();
-  });
-});
-
-req.write(JSON.stringify({email: 'alice@skillswap.com', password: 'Password123'}));
-req.end();
+const fs = require('fs');
+let content = fs.readFileSync('frontend/lib/api.ts', 'utf8');
+content = content.replace(
+  'myMatches: () => request<any>(`/api/matches/my-matches`),',
+  `myMatches: () => request<any>('/api/matches/my-matches'),\n      explore: (params?: { q?: string; category?: string }) => {\n        const sp = new URLSearchParams();\n        if (params?.q) sp.set('q', params.q);\n        if (params?.category) sp.set('category', params.category);\n        return request<any>(`/api/matches/explore?${sp}`);\n      },`
+);
+fs.writeFileSync('frontend/lib/api.ts', content);
+console.log('Done');

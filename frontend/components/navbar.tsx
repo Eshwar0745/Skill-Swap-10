@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
+import { io } from "socket.io-client"
 
 interface NavbarProps {
   darkMode: boolean
@@ -17,7 +18,7 @@ interface NavbarProps {
 export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
-  const { isAuthenticated, user, logout, ready } = useAuth()
+  const { isAuthenticated, user, logout, ready, token } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -32,9 +33,24 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
         loadUnreadCount()
         loadNotifications()
       }, 30000)
-      return () => clearInterval(interval)
+
+      // Initialize Socket.io for immediate updates
+      let socket: any = null
+      if (token) {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+        socket = io(backendUrl, {
+          auth: { token }
+        })
+        socket.on('message:new', () => loadUnreadCount())
+        socket.on('notification:new', () => loadNotifications())
+      }
+
+      return () => {
+        clearInterval(interval)
+        if (socket) socket.disconnect()
+      }
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, token])
 
   const loadUnreadCount = async () => {
     try {

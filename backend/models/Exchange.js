@@ -4,7 +4,7 @@ const exchangeSchema = new mongoose.Schema(
   {
     requester: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     provider: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    requestedSkill: { type: mongoose.Schema.Types.ObjectId, ref: 'RequestedSkill' },
+    requestedSkill: { type: mongoose.Schema.Types.ObjectId, ref: 'OfferedSkill' },
     offeredSkill: { type: mongoose.Schema.Types.ObjectId, ref: 'OfferedSkill' },
     status: {
       type: String,

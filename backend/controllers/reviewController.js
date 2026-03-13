@@ -34,6 +34,21 @@ exports.createReview = asyncHandler(async (req, res) => {
   if (String(revieweeId) === String(req.user._id)) {
     return res.status(400).json({ message: 'You cannot review yourself' });
   }
+  
+  // Check if they already reviewed this user
+  const existingReview = await Review.findOne({ reviewer: req.user._id, reviewee: revieweeId });
+  if (existingReview) {
+    existingReview.rating = rating;
+    existingReview.comment = comment;
+    existingReview.context = context;
+    if (skillId) existingReview.skillId = skillId;
+    await existingReview.save();
+    
+    await recomputeUserRating(revieweeId);
+    await recomputeBadges(revieweeId);
+    return res.json(existingReview);
+  }
+
   const review = await Review.create({
     reviewer: req.user._id,
     reviewee: revieweeId,

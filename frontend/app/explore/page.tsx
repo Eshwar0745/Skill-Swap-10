@@ -8,12 +8,16 @@ import { Search } from "lucide-react"
 import { motion } from "framer-motion"
 import { ScrollReveal } from "@/components/scroll-reveal"
 import { api } from "@/lib/api"
+import { useAuth } from "@/context/AuthContext"
 
 export default function ExplorePage() {
+  const { isAuthenticated, ready } = useAuth();
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedLocation, setSelectedLocation] = useState("All")
   const [skillType, setSkillType] = useState<"offered" | "requested">("offered")
+  const [mutualOnly, setMutualOnly] = useState(false)
+  const [mutualMatchIds, setMutualMatchIds] = useState<Set<string>>(new Set())
   const [skills, setSkills] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<string[]>(["All"])
@@ -56,8 +60,8 @@ export default function ExplorePage() {
         const uniqueLocations = Array.from(
           new Set(
             (res.items || [])
-              .map((s: any) => s.location)
-              .filter((loc: string) => loc && loc.trim())
+              .map((s: any) => s.location?.trim())
+              .filter((loc: string) => loc)
           )
         ).sort()
         setLocations(["All", ...uniqueLocations])
@@ -71,11 +75,38 @@ export default function ExplorePage() {
     loadSkills()
   }, [skillType, selectedCategory, searchQuery])
 
-  // Filter skills by location (client-side since backend doesn't filter by location yet)
+  // Load mutual matches if authenticated
+  useEffect(() => {
+    const loadMutual = async () => {
+      if (ready && isAuthenticated && skillType === "offered") {
+        try {
+          const res = await api.matches.myMatches()
+          const mutualIds = new Set<string>()
+          res.matches?.forEach((m: any) => {
+            if (m.isMutualMatch && m.offeredSkill?._id) {
+              mutualIds.add(m.offeredSkill._id)
+            }
+          })
+          setMutualMatchIds(mutualIds)
+        } catch (e) {
+          console.error("Failed to load mutual matches:", e)
+        }
+      }
+    }
+    loadMutual()
+  }, [ready, isAuthenticated, skillType])
+
+  // Filter skills by location and mutual status
   const filteredSkills = useMemo(() => {
-    if (selectedLocation === "All") return skills
-    return skills.filter((skill) => skill.location === selectedLocation)
-  }, [skills, selectedLocation])
+    let result = skills
+    if (selectedLocation !== "All") {
+      result = result.filter((skill) => skill.location === selectedLocation)
+    }
+    if (mutualOnly) {
+      result = result.filter((skill) => mutualMatchIds.has(skill._id))
+    }
+    return result
+  }, [skills, selectedLocation, mutualOnly, mutualMatchIds])
 
   return (
     <div className="min-h-screen py-12">
@@ -170,10 +201,23 @@ export default function ExplorePage() {
               </motion.div>
             </div>
 
-            {/* Results Count */}
-            <motion.div className="text-sm text-foreground/60" animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-              {loading ? "Loading..." : `Showing ${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}`}
-            </motion.div>
+            {/* Results Count & Mutual Toggle */}
+            <div className="flex justify-between items-center text-sm">
+              <motion.div className="text-foreground/60" animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+                {loading ? "Loading..." : `Showing ${filteredSkills.length} skill${filteredSkills.length !== 1 ? "s" : ""}`}
+              </motion.div>
+              {isAuthenticated && skillType === "offered" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground/80">Mutual Matches Only</span>
+                  <button 
+                    onClick={() => setMutualOnly(!mutualOnly)}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${mutualOnly ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`block w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${mutualOnly ? 'left-[22px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              )}
+            </div>
           </motion.div>
         </div>
 
@@ -203,8 +247,7 @@ export default function ExplorePage() {
               {filteredSkills.map((skill) => (
                 <SkillCard key={skill._id} skill={{
                   id: skill._id,
-                  title: skill.title,
-                  category: skill.categories?.[0] || 'Other',
+                  title: skill.title,                    isMutual: mutualMatchIds.has(skill._id),                  category: skill.categories?.[0] || 'Other',
                   user: {
                     name: skill.user?.name || 'Anonymous',
                     avatar: skill.user?.avatarUrl || '/placeholder.svg',

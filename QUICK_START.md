@@ -72,6 +72,7 @@ pnpm dev
 8. Click **"Add Skill"** under "Skills I Want to Learn"
 9. Add: "Python", Category: "Programming"
 
+
 **Step 3: Request Swap**
 1. As Bob, go to **Explore**
 2. Find Alice's "Python Programming" skill

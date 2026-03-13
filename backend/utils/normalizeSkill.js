@@ -8,10 +8,42 @@ function normalizeSkillTitle(title) {
     return '';
   }
   
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+  let normalized = title.trim().toLowerCase().replace(/\s+/g, ' ');
+
+  // 1. Direct Alias Mapping
+  const aliases = {
+    'reactjs': 'react',
+    'react.js': 'react',
+    'nodejs': 'node js',
+    'node.js': 'node js',
+    'vuejs': 'vue',
+    'vue.js': 'vue',
+    'front-end': 'frontend',
+    'back-end': 'backend',
+    'c plus plus': 'c++',
+    'c sharp': 'c#',
+    'ui/ux': 'ui ux'
+  };
+
+  if (aliases[normalized]) {
+    normalized = aliases[normalized];
+  } else {
+    // 2. Strip filler words
+    const words = normalized.split(' ');
+    if (words.length > 1) {
+      const stopWords = [
+        'programming', 'development', 'developer', 'coding', 
+        'language', 'tutorial', 'tutor', 'tutoring', 
+        'basics', 'advanced', 'expert', 'course', 'training'
+      ];
+      const filteredWords = words.filter(w => !stopWords.includes(w));
+      if (filteredWords.length > 0) {
+        normalized = filteredWords.join(' ');
+      }
+    }
+  }
+
+  return normalized
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Title case
     .join(' ');

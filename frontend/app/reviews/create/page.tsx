@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Star, ArrowLeft } from "lucide-react"
 
-export default function CreateReviewPage() {
+function CreateReviewContent() {
   const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -42,7 +42,7 @@ export default function CreateReviewPage() {
         revieweeId,
         rating,
         comment: comment.trim(),
-        context: 'exchange'
+        context: 'general'
       })
       alert('Review submitted successfully!')
       router.push('/exchanges')
@@ -155,5 +155,17 @@ export default function CreateReviewPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CreateReviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+      </div>
+    }>
+      <CreateReviewContent />
+    </Suspense>
   )
 }

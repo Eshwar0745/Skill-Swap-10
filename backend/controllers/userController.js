@@ -80,3 +80,27 @@ exports.uploadAvatar = asyncHandler(async (req, res) => {
   ).select('-password -tokenVersion');
   res.json({ avatarUrl: relPath, user });
 });
+
+exports.followUser = asyncHandler(async (req, res) => {
+  const userToFollowId = req.params.id;
+  const currentUserId = req.user._id;
+
+  if (String(userToFollowId) === String(currentUserId)) {
+    return res.status(400).json({ message: 'You cannot follow yourself' });
+  }
+
+  await User.findByIdAndUpdate(currentUserId, { $addToSet: { following: userToFollowId } });
+  await User.findByIdAndUpdate(userToFollowId, { $addToSet: { followers: currentUserId } });
+
+  res.json({ message: 'Successfully followed user' });
+});
+
+exports.unfollowUser = asyncHandler(async (req, res) => {
+  const userToUnfollowId = req.params.id;
+  const currentUserId = req.user._id;
+
+  await User.findByIdAndUpdate(currentUserId, { $pull: { following: userToUnfollowId } });
+  await User.findByIdAndUpdate(userToUnfollowId, { $pull: { followers: currentUserId } });
+
+  res.json({ message: 'Successfully unfollowed user' });
+});
