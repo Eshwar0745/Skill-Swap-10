@@ -1,67 +1,89 @@
-# SkillSwap – Peer-to-Peer Skill Exchange Platform
+# 🔄 SkillSwap - Peer-to-Peer Skill Exchange 
 
-SkillSwap is a full-stack web application that enables users to exchange skills without money. Learn what you want by teaching what you know!
+SkillSwap is a modern full-stack web application designed to help people learn new things by trading their existing expertise. No money involved—just pure skill bartering. If you know Python and want to learn Graphic Design, SkillSwap helps you find the perfect mutual match!
 
+## ✨ Core Features
+- 🤝 **Pure Barter System:** Users list "Skills I Offer" and "Skills I Want". The platform facilitates 1-to-1 trades.
+- 🔍 **Smart Mutual Matching:** The *Explore* feed highlights users who offer what you want **and** want what you offer.
+- 💬 **Real-time Messaging:** Integrated live chat via Socket.IO so users can easily organize their knowledge-sharing sessions.
+- ⭐ **Reviews & Ratings:** After an exchange is marked 'Completed', both parties can leave a 1-5 star review calculating aggregate user trust scores.
+- 👥 **Social Network:** Follow your favorite educators, see their subscriber count, and stay updated on their new skills.
+- 🎨 **Modern UI/UX:** Built with Next.js 16, Tailwind CSS, shadcn/ui components, and Framer Motion for beautiful page transitions.
 
-📁 Project Structure
-skillswap/
-├── backend/          # Express API server
-│   ├── config/       # Database, Redis, CORS
-│   ├── controllers/  # Business logic
-│   ├── models/       # Mongoose schemas
-│   ├── routes/       # API endpoints
-│   └── server.js     # Entry point
-│
-└── frontend/         # Next.js app
-    ├── app/          # App router pages
-    ├── components/   # UI components
-    └── lib/          # API client & utils
+## 🛠️ Tech Stack
 
+### Frontend
+- **Framework:** Next.js 16 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS + `framer-motion`
+- **Components:** shadcn/ui (Radix UI)
+- **Icons:** Lucide React
 
-## ⚙️ Features
+### Backend
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Database:** MongoDB (via Mongoose)
+- **Real-time:** Socket.IO
+- **Security:** JWT Authentication, Helmet, Rate Limiting, bcryptjs
 
-- **Authentication** – JWT-based auth with refresh tokens
-- **Skill Management** – Offer skills you can teach, request skills you want to learn
-- **Exchange System** – Request swaps, accept/decline, mark as complete
-- **Real-time Messaging** – Socket.IO powered instant chat
-- **Reviews & Ratings** – Rate users after skill exchanges
-- **Smart Search** – Full-text search with category and location filters
-- **Notifications** – In-app notifications for exchange requests
+## 🚀 Local Development Setup
 
-## 📋 Table of Contents
+To run this application locally, you will need **Node.js (>= 18)** and **MongoDB** installed on your machine.
 
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Running the App](#running-the-app)
-- [Tech Stack](#tech-stack)
-
-## Prerequisites
-
-- Node.js (v18+)
-- MongoDB (v8.0+)
-- pnpm
-- Redis (optional, for caching)
-
-## Installation
-
+### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/skillswap.git
-cd skillswap
+git clone https://github.com/Eshwar0745/Skill-Swap-10.git
+cd Skill-Swap-10
+```
 
-# Backend setup
+### 2. Configure Backend
+```bash
 cd backend
 npm install
+```
+Create a `.env` file in the `backend` directory:
+```env
+NODE_ENV=development
+PORT=4000
+MONGO_URI=mongodb://localhost:27017/skillswap
+JWT_SECRET=your_super_secret_key
+FRONTEND_URLS=http://localhost:3000
+```
+Start the backend server:
+```bash
+npm run dev
+```
 
-# Frontend setup
-cd ../frontend
+### 3. Configure Frontend
+Open a new terminal window:
+```bash
+cd frontend
 pnpm install
+```
+Create a `.env.local` file in the `frontend` directory:
+```env
+NEXT_PUBLIC_API_BASE=http://localhost:4000
+```
+Start the frontend development server:
+```bash
+pnpm dev
+```
 
+Visit **http://localhost:3000** to view the app!
 
-Running the App
-Make sure MongoDB is running:
+## 🌍 Production Deployment
 
-Then start the services:
+This application is ready for free-tier cloud deployment:
+1. **Database:** Deploy your MongoDB cluster using **MongoDB Atlas**.
+2. **Backend:** Deploy the `backend` folder to **Render**, providing the `MONGO_URI` from Atlas.
+3. **Frontend:** Deploy the `frontend` folder via **Vercel**, securely providing the Render URL as the `NEXT_PUBLIC_API_BASE`.
+
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome!
+Feel free to check out the [issues page](https://github.com/Eshwar0745/Skill-Swap-10/issues).
+
+## 📄 License
+This project is licensed under the MIT License.
 
 
 
