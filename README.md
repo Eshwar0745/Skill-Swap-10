@@ -69,7 +69,7 @@ Start the frontend development server:
 pnpm dev
 ```
 
-Visit **http://localhost:3000** to view the app!
+Visit **skill-swap-10.vercel.app** to view the app!
 
 ## 🌍 Production Deployment
 
