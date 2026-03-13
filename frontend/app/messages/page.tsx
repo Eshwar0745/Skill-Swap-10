@@ -39,13 +39,15 @@ export default function MessagesPage() {
   }
 
   const handleSelectUser = async (conn: any) => {
+    console.log("Selected user:", conn)
     setSelectedUser(conn)
     try {
       const res = await api.messages.getThread(conn.userId)
+      console.log("Thread response:", res)
       setMessages(res.messages || [])
       await api.messages.markRead(conn.userId)
     } catch (e) {
-      console.error(e)
+      console.error("Error fetching thread:", e)
     }
   }
 

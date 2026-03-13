@@ -122,7 +122,7 @@ export default function SkillCard({ skill }: { skill: Skill }) {
               size="sm"
               variant="default"
               className="w-full rounded-full gap-2 transition-all duration-200"
-              onClick={handleRequestExchange}
+              onClick={(e) => { e.stopPropagation(); handleRequestExchange(); }}
               disabled={loading || String(ownerId) === String(user?.id)}
             >
               <HandshakeIcon className="w-4 h-4" />
@@ -134,7 +134,7 @@ export default function SkillCard({ skill }: { skill: Skill }) {
               size="sm"
               variant="outline"
               className="rounded-full px-3"
-              onClick={handleMessage}
+              onClick={(e) => { e.stopPropagation(); handleMessage(); }}
               disabled={String(ownerId) === String(user?.id)}
             >
               <MessageCircle className="w-4 h-4" />

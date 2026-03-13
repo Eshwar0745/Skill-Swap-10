@@ -26,7 +26,6 @@ skillswap/
 - **Real-time Messaging** – Socket.IO powered instant chat
 - **Reviews & Ratings** – Rate users after skill exchanges
 - **Smart Search** – Full-text search with category and location filters
-- **Redis Caching** – Fast response times with intelligent cache invalidation
 - **Notifications** – In-app notifications for exchange requests
 
 ## 📋 Table of Contents

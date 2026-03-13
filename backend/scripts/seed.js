@@ -319,7 +319,7 @@ const users = [
 async function seed() {
   try {
     // Connect to MongoDB
-    await mongoose.connect(`${MONGO_URI}${MONGO_DB}`);
+    await mongoose.connect(MONGO_URI, { dbName: MONGO_DB });
     console.log('✅ Connected to MongoDB');
 
     // Clear existing data

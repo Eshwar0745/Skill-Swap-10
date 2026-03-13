@@ -24,6 +24,10 @@ exports.createExchange = asyncHandler(async (req, res) => {
   if (!providerId && !offeredSkillId && !requestedSkillId) {
     return res.status(400).json({ message: 'At least one of providerId/offeredSkillId/requestedSkillId is required' });
   }
+  if (String(providerId) === String(req.user._id)) {
+    return res.status(400).json({ message: 'You cannot request an exchange with yourself' });
+  }
+
   const payload = {
     requester: req.user._id,
     provider: providerId || undefined,
