@@ -1,11 +1,12 @@
 const Exchange = require('../models/Exchange');
 const Notification = require('../models/Notification');
+const OfferedSkill = require('../models/OfferedSkill');
+const RequestedSkill = require('../models/RequestedSkill');
 const { asyncHandler } = require('../utils/asyncHandler');
 const User = require('../models/User');
-const { sendMail } = require('../services/mailer');
+const mongoose = require('mongoose');
 
 async function computeBadgesForUser(userId) {
-  // Count completed exchanges
   const completedAsRequester = await Exchange.countDocuments({ requester: userId, status: 'completed' });
   const completedAsProvider = await Exchange.countDocuments({ provider: userId, status: 'completed' });
   const totalCompleted = completedAsRequester + completedAsProvider;
@@ -20,25 +21,88 @@ async function computeBadgesForUser(userId) {
 }
 
 exports.createExchange = asyncHandler(async (req, res) => {
-  const { providerId, offeredSkillId, requestedSkillId, scheduledAt, notes } = req.body;
-  if (!providerId && !offeredSkillId && !requestedSkillId) {
-    return res.status(400).json({ message: 'At least one of providerId/offeredSkillId/requestedSkillId is required' });
+  const { providerId, requesterSkillId, providerSkillId, scheduledAt, notes } = req.body;
+  const requesterId = String(req.user._id);
+
+  if (!providerId) {
+    return res.status(400).json({ message: 'providerId is required' });
   }
+
+  // Prevent self-swap
+  if (requesterId === String(providerId)) {
+    return res.status(400).json({ message: 'You cannot request a swap with yourself' });
+  }
+
+  // Validate providerId is a real user
+  if (!mongoose.Types.ObjectId.isValid(providerId)) {
+    return res.status(400).json({ message: 'Invalid providerId' });
+  }
+  const providerUser = await User.findById(providerId);
+  if (!providerUser) {
+    return res.status(404).json({ message: 'Provider user not found' });
+  }
+
+  // Prevent duplicate active swap requests between same two users
+  const existingExchange = await Exchange.findOne({
+    $or: [
+      { requester: requesterId, provider: providerId },
+      { requester: providerId, provider: requesterId },
+    ],
+    status: { $in: ['proposed', 'accepted'] },
+  });
+  if (existingExchange) {
+    return res.status(409).json({ message: 'An active swap request already exists between you and this user' });
+  }
+
+  // Validate skills belong to correct users
+  if (requesterSkillId) {
+    const skill = await OfferedSkill.findById(requesterSkillId);
+    if (!skill || String(skill.user) !== requesterId) {
+      return res.status(400).json({ message: 'requesterSkillId does not belong to you' });
+    }
+  }
+  if (providerSkillId) {
+    const skill = await OfferedSkill.findById(providerSkillId);
+    if (!skill || String(skill.user) !== String(providerId)) {
+      return res.status(400).json({ message: 'providerSkillId does not belong to the provider' });
+    }
+  }
+
   const payload = {
-    requester: req.user._id,
-    provider: providerId || undefined,
-    offeredSkill: offeredSkillId || undefined,
-    requestedSkill: requestedSkillId || undefined,
+    requester: requesterId,
+    provider: providerId,
+    requesterSkill: requesterSkillId || undefined,
+    providerSkill: providerSkillId || undefined,
     scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
-    notes,
+    notes: typeof notes === 'string' ? notes.slice(0, 1000) : '',
   };
+
   const ex = await Exchange.create(payload);
   const populated = await Exchange.findById(ex._id)
     .populate('requester', 'name avatarUrl')
     .populate('provider', 'name avatarUrl')
-    .populate('offeredSkill', 'title')
-    .populate('requestedSkill', 'title')
+    .populate('requesterSkill', 'title')
+    .populate('providerSkill', 'title')
     .lean();
+
+  // Notify provider of new swap request
+  try {
+    await Notification.create({
+      user: providerId,
+      type: 'swap_request',
+      title: 'New swap request',
+      body: `${req.user.name} wants to swap skills with you!`,
+      data: { exchangeId: ex._id, requesterId },
+    });
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${String(providerId)}`).emit('notification:new', {
+        type: 'swap_request',
+        title: 'New swap request',
+      });
+    }
+  } catch (_) {}
+
   res.status(201).json(populated);
 });
 
@@ -56,8 +120,10 @@ exports.listExchanges = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
-      .populate('requester', 'name avatarUrl')
-      .populate('provider', 'name avatarUrl')
+      .populate('requester', 'name avatarUrl location')
+      .populate('provider', 'name avatarUrl location')
+      .populate('requesterSkill', 'title')
+      .populate('providerSkill', 'title')
       .populate('offeredSkill', 'title')
       .populate('requestedSkill', 'title')
       .lean(),
@@ -69,8 +135,10 @@ exports.listExchanges = asyncHandler(async (req, res) => {
 exports.getExchange = asyncHandler(async (req, res) => {
   const me = String(req.user._id);
   const ex = await Exchange.findById(req.params.id, '-__v')
-    .populate('requester', 'name avatarUrl')
-    .populate('provider', 'name avatarUrl')
+    .populate('requester', 'name avatarUrl location')
+    .populate('provider', 'name avatarUrl location')
+    .populate('requesterSkill', 'title')
+    .populate('providerSkill', 'title')
     .populate('offeredSkill', 'title')
     .populate('requestedSkill', 'title')
     .lean();
@@ -86,36 +154,77 @@ exports.updateExchangeStatus = asyncHandler(async (req, res) => {
   const ex = await Exchange.findById(req.params.id);
   if (!ex) return res.status(404).json({ message: 'Not found' });
   const me = String(req.user._id);
-  const isParticipant = [String(ex.requester), String(ex.provider)].includes(me);
-  if (!isParticipant) return res.status(403).json({ message: 'Forbidden' });
+  const isRequester = String(ex.requester) === me;
+  const isProvider = String(ex.provider) === me;
+  if (!isRequester && !isProvider) return res.status(403).json({ message: 'Forbidden' });
+
+  // Role-based status transitions
   if (status) {
+    if (status === 'accepted' && !isProvider) {
+      return res.status(403).json({ message: 'Only the provider can accept a swap request' });
+    }
+    if (status === 'declined' && !isProvider) {
+      return res.status(403).json({ message: 'Only the provider can decline a swap request' });
+    }
+    if (status === 'cancelled') {
+      if (ex.status !== 'proposed' && ex.status !== 'accepted') {
+        return res.status(400).json({ message: 'Can only cancel proposed or accepted exchanges' });
+      }
+    }
+    if (status === 'completed') {
+      if (ex.status !== 'accepted') {
+        return res.status(400).json({ message: 'Can only complete accepted exchanges' });
+      }
+    }
+    if (status === 'accepted' && ex.status !== 'proposed') {
+      return res.status(400).json({ message: 'Can only accept proposed exchanges' });
+    }
+    if (status === 'declined' && ex.status !== 'proposed') {
+      return res.status(400).json({ message: 'Can only decline proposed exchanges' });
+    }
+
     ex.status = status;
     if (status === 'completed') ex.completedAt = new Date();
   }
   if (scheduledAt !== undefined) ex.scheduledAt = scheduledAt ? new Date(scheduledAt) : undefined;
-  if (notes !== undefined) ex.notes = notes;
+  if (notes !== undefined) ex.notes = typeof notes === 'string' ? notes.slice(0, 1000) : ex.notes;
   await ex.save();
+
   const populated = await Exchange.findById(ex._id)
-    .populate('requester', 'name avatarUrl')
-    .populate('provider', 'name avatarUrl')
+    .populate('requester', 'name avatarUrl location')
+    .populate('provider', 'name avatarUrl location')
+    .populate('requesterSkill', 'title')
+    .populate('providerSkill', 'title')
     .populate('offeredSkill', 'title')
     .populate('requestedSkill', 'title')
     .lean();
   res.json(populated);
-  // Notify the other participant of status change or schedule update
+
+  // Notify the other participant of status change
   try {
-    const other = String(ex.requester) === String(me) ? ex.provider : ex.requester;
-    await Notification.create({
-      user: other,
-      type: 'exchange',
-      title: 'Exchange updated',
-      body: `Status: ${ex.status}`,
-      data: { exchangeId: ex._id },
-    });
-    // Email notification (if configured)
-    try {
-      await sendMail(String(other.email || ''), 'Exchange updated', `<p>Your exchange status is now <b>${ex.status}</b>.</p>`);
-    } catch (_) {}
+    const other = isRequester ? ex.provider : ex.requester;
+    const statusLabels = {
+      accepted: 'accepted your swap request!',
+      declined: 'declined your swap request.',
+      cancelled: 'cancelled the exchange.',
+      completed: 'marked the exchange as completed!',
+    };
+    if (status && statusLabels[status]) {
+      await Notification.create({
+        user: other,
+        type: 'exchange',
+        title: 'Exchange updated',
+        body: `${req.user.name} ${statusLabels[status]}`,
+        data: { exchangeId: ex._id },
+      });
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user:${String(other)}`).emit('notification:new', {
+          type: 'exchange',
+          title: 'Exchange updated',
+        });
+      }
+    }
   } catch (_) {}
 
   // Re-compute badges when completed

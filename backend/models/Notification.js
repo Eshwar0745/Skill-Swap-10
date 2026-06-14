@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    type: { type: String, enum: ['message', 'exchange', 'system'], required: true },
+    type: {
+      type: String,
+      enum: ['message', 'exchange', 'swap_request', 'review', 'follow', 'system'],
+      required: true,
+    },
     title: { type: String, default: '' },
     body: { type: String, default: '' },
     data: { type: Object },

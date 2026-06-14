@@ -1,14 +1,14 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Mail, Lock, User, ArrowRight, Sparkles } from "lucide-react"
+import { toast } from "sonner"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -17,41 +17,72 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
   const [agreeTerms, setAgreeTerms] = useState(false)
-  const { register: registerUser } = useAuth()
+  const { register: registerUser, googleLogin } = useAuth()
+  const googleButtonRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Initialize Google Sign-In
+    const initGoogleSignIn = () => {
+      if (typeof window !== "undefined" && (window as any).google) {
+        (window as any).google.accounts.id.initialize({
+          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "placeholder",
+          callback: async (response: any) => {
+            setIsLoading(true)
+            try {
+              await googleLogin(response.credential)
+              toast.success("Successfully signed in with Google!")
+              router.push("/")
+            } catch (e: any) {
+              toast.error(e?.message || "Google signup failed")
+              setIsLoading(false)
+            }
+          },
+        })
+        if (googleButtonRef.current) {
+          (window as any).google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: "outline",
+            size: "large",
+            width: 350,
+          })
+        }
+      } else {
+        setTimeout(initGoogleSignIn, 100)
+      }
+    }
+    initGoogleSignIn()
+  }, [])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
 
     if (!name || !email || !password || !confirmPassword) {
-      setError("Please fill in all fields")
+      toast.error("Please fill in all fields")
       return
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match")
+      toast.error("Passwords do not match")
       return
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters")
+      toast.error("Password must be at least 8 characters")
       return
     }
 
     if (!agreeTerms) {
-      setError("Please accept the terms and conditions")
+      toast.error("Please accept the terms and conditions")
       return
     }
 
     setIsLoading(true)
     try {
       await registerUser(name, email, password)
+      toast.success("Account created successfully!")
       router.push("/")
     } catch (e: any) {
-      setError(e?.message || "Sign up failed")
-    } finally {
+      toast.error(e?.message || "Sign up failed")
       setIsLoading(false)
     }
   }
@@ -80,8 +111,6 @@ export default function SignupPage() {
 
           {/* Form */}
           <form onSubmit={handleSignup} className="space-y-4">
-            {error && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
-
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground">Full Name</label>
               <div className="relative">
@@ -168,6 +197,18 @@ export default function SignupPage() {
               {!isLoading && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border"></div>
+            <span className="text-sm text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-border"></div>
+          </div>
+
+          {/* OAuth */}
+          <div className="flex justify-center w-full min-h-[44px]">
+            <div ref={googleButtonRef} className="w-full flex justify-center"></div>
+          </div>
 
           {/* Footer */}
           <div className="text-center text-sm text-foreground/60">

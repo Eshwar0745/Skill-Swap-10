@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { register, login, me, refresh, logout } = require('../controllers/authController');
+const { register, login, googleLogin, me, refresh, logout } = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimit');
@@ -24,6 +24,15 @@ router.post(
 	validate,
 	login
 );
+
+router.post(
+	'/google',
+	authLimiter,
+	[body('idToken').isString().notEmpty().withMessage('Google ID token is required')],
+	validate,
+	googleLogin
+);
+
 router.get('/me', auth, me);
 router.post('/refresh', refresh);
 router.post('/logout', auth, logout);

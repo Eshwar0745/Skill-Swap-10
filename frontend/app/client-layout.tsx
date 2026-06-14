@@ -12,6 +12,8 @@ import { AuthProvider } from "@/context/AuthContext"
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
+import { Toaster } from 'sonner'
+
 export default function ClientLayout({
   children,
 }: Readonly<{
@@ -43,6 +45,7 @@ export default function ClientLayout({
       <Navbar darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />
       <main className="min-h-screen">{children}</main>
       <Footer />
+      <Toaster position="bottom-right" />
       <Analytics />
     </AuthProvider>
   )

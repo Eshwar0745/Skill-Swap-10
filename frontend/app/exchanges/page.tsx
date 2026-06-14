@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
 import { useRouter } from "next/navigation"
-import { CheckCircle, XCircle, Clock, Calendar, User } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Calendar, MessageCircle, Star, Ban } from "lucide-react"
+import { toast } from "sonner"
 
 export default function ExchangesPage() {
   const { user, isAuthenticated, ready } = useAuth()
@@ -33,8 +34,8 @@ export default function ExchangesPage() {
       
       const res = await api.exchanges.list(params)
       setExchanges(res.items || [])
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load exchanges')
     } finally {
       setLoading(false)
     }
@@ -43,9 +44,10 @@ export default function ExchangesPage() {
   const handleStatusUpdate = async (exchangeId: string, newStatus: string) => {
     try {
       await api.exchanges.updateStatus(exchangeId, newStatus)
+      toast.success(`Exchange ${newStatus} successfully`)
       loadExchanges()
     } catch (e: any) {
-      alert(e?.message || 'Failed to update status')
+      toast.error(e?.message || 'Failed to update status')
     }
   }
 
@@ -53,8 +55,8 @@ export default function ExchangesPage() {
     router.push(`/messages?userId=${userId}`)
   }
 
-  const handleReview = (userId: string) => {
-    router.push(`/reviews/create?userId=${userId}`)
+  const handleReview = (exchangeId: string) => {
+    router.push(`/reviews/create?exchangeId=${exchangeId}`)
   }
 
   if (!ready) {
@@ -92,7 +94,7 @@ export default function ExchangesPage() {
               onClick={() => setFilter('requester')}
               className="rounded-full"
             >
-              My Requests
+              Sent Requests
             </Button>
             <Button
               variant={filter === 'provider' ? 'default' : 'outline'}
@@ -112,41 +114,49 @@ export default function ExchangesPage() {
             <option value="proposed">Proposed</option>
             <option value="accepted">Accepted</option>
             <option value="declined">Declined</option>
+            <option value="cancelled">Cancelled</option>
             <option value="completed">Completed</option>
           </select>
         </div>
 
         {/* Exchanges List */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-            <p className="mt-4 text-foreground/60">Loading exchanges...</p>
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-40 bg-card rounded-xl animate-pulse border border-border"></div>
+            ))}
           </div>
         ) : exchanges.length > 0 ? (
           <div className="space-y-4">
             {exchanges.map((exchange) => {
               const isRequester = String(exchange.requester?._id || exchange.requester) === String(user?.id)
               const otherUser = isRequester ? exchange.provider : exchange.requester
+              
+              // Action logic
               const canAccept = !isRequester && exchange.status === 'proposed'
               const canDecline = !isRequester && exchange.status === 'proposed'
+              const canCancel = exchange.status === 'proposed' || exchange.status === 'accepted'
               const canComplete = exchange.status === 'accepted'
+              const canMessage = exchange.status === 'accepted' || exchange.status === 'completed'
+              const canReview = exchange.status === 'completed'
 
               return (
                 <div
                   key={exchange._id}
-                  className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all"
+                  className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all shadow-sm"
                 >
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                    <div className="flex-1 space-y-3">
+                    <div className="flex-1 space-y-4">
                       <div className="flex items-center gap-3">
                         <img
                           src={otherUser?.avatarUrl || '/placeholder.svg'}
                           alt={otherUser?.name || 'User'}
-                          className="w-12 h-12 rounded-full border-2 border-primary/20"
+                          className="w-12 h-12 rounded-full border-2 border-primary/20 cursor-pointer"
+                          onClick={() => router.push(`/user/${otherUser?._id}`)}
                         />
                         <div>
-                          <p className="font-semibold text-foreground">
-                            {isRequester ? 'Request to' : 'Request from'} {otherUser?.name || 'User'}
+                          <p className="font-semibold text-foreground cursor-pointer hover:underline" onClick={() => router.push(`/user/${otherUser?._id}`)}>
+                            {isRequester ? 'Request sent to' : 'Request received from'} {otherUser?.name || 'User'}
                           </p>
                           <p className="text-sm text-foreground/60">
                             {new Date(exchange.createdAt).toLocaleDateString()}
@@ -154,40 +164,54 @@ export default function ExchangesPage() {
                         </div>
                       </div>
 
-                      {exchange.offeredSkill && (
-                        <div className="text-sm">
-                          <span className="text-foreground/60">Skill: </span>
-                          <span className="font-medium text-foreground">
-                            {exchange.offeredSkill?.title || 'Unknown'}
+                      <div className="grid sm:grid-cols-2 gap-4 text-sm bg-background/50 p-4 rounded-lg border border-border/50">
+                        <div>
+                          <span className="text-foreground/60 block mb-1">They will teach:</span>
+                          <span className="font-medium">
+                            {exchange.providerSkill?.title || exchange.offeredSkill?.title || 'General Mentorship'}
                           </span>
                         </div>
-                      )}
+                        <div>
+                          <span className="text-foreground/60 block mb-1">You will teach:</span>
+                          <span className="font-medium">
+                            {exchange.requesterSkill?.title || exchange.requestedSkill?.title || 'General Mentorship'}
+                          </span>
+                        </div>
+                      </div>
 
                       {exchange.notes && (
-                        <p className="text-sm text-foreground/70 italic">"{exchange.notes}"</p>
+                        <p className="text-sm text-foreground/70 italic border-l-2 border-primary/20 pl-3">
+                          "{exchange.notes}"
+                        </p>
                       )}
 
                       <div className="flex items-center gap-2">
                         {exchange.status === 'proposed' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-600 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-600 text-xs font-medium border border-yellow-500/20">
                             <Clock className="w-3 h-3" />
                             Pending
                           </span>
                         )}
                         {exchange.status === 'accepted' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-medium border border-green-500/20">
                             <CheckCircle className="w-3 h-3" />
                             Accepted
                           </span>
                         )}
                         {exchange.status === 'declined' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-medium border border-red-500/20">
                             <XCircle className="w-3 h-3" />
                             Declined
                           </span>
                         )}
+                        {exchange.status === 'cancelled' && (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-500/10 text-gray-600 text-xs font-medium border border-gray-500/20">
+                            <Ban className="w-3 h-3" />
+                            Cancelled
+                          </span>
+                        )}
                         {exchange.status === 'completed' && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 text-xs font-medium border border-blue-500/20">
                             <CheckCircle className="w-3 h-3" />
                             Completed
                           </span>
@@ -201,7 +225,7 @@ export default function ExchangesPage() {
                           size="sm"
                           variant="default"
                           onClick={() => handleStatusUpdate(exchange._id, 'accepted')}
-                          className="rounded-full gap-1"
+                          className="rounded-full gap-1 w-full"
                         >
                           <CheckCircle className="w-4 h-4" />
                           Accept
@@ -212,7 +236,7 @@ export default function ExchangesPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleStatusUpdate(exchange._id, 'declined')}
-                          className="rounded-full gap-1"
+                          className="rounded-full gap-1 w-full"
                         >
                           <XCircle className="w-4 h-4" />
                           Decline
@@ -223,34 +247,45 @@ export default function ExchangesPage() {
                           size="sm"
                           variant="default"
                           onClick={() => handleStatusUpdate(exchange._id, 'completed')}
-                          className="rounded-full gap-1"
+                          className="rounded-full gap-1 w-full"
                         >
                           <CheckCircle className="w-4 h-4" />
                           Mark Complete
                         </Button>
                       )}
-                      {exchange.status === 'accepted' || exchange.status === 'completed' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleMessage(otherUser?._id || otherUser)}
-                            className="rounded-full gap-1"
-                          >
-                            Message
-                          </Button>
-                          {exchange.status === 'completed' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleReview(otherUser?._id || otherUser)}
-                              className="rounded-full gap-1"
-                            >
-                              Leave Review
-                            </Button>
-                          )}
-                        </>
-                      ) : null}
+                      {canMessage && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleMessage(otherUser?._id || otherUser)}
+                          className="rounded-full gap-1 w-full"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          Message
+                        </Button>
+                      )}
+                      {canReview && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReview(exchange._id)}
+                          className="rounded-full gap-1 w-full"
+                        >
+                          <Star className="w-4 h-4" />
+                          Leave Review
+                        </Button>
+                      )}
+                      {canCancel && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleStatusUpdate(exchange._id, 'cancelled')}
+                          className="rounded-full gap-1 w-full text-muted-foreground hover:text-destructive"
+                        >
+                          <Ban className="w-4 h-4" />
+                          Cancel
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -258,17 +293,17 @@ export default function ExchangesPage() {
             })}
           </div>
         ) : (
-          <div className="text-center py-12 bg-card border border-border rounded-xl">
+          <div className="text-center py-16 bg-card border border-border rounded-xl shadow-sm">
             <Calendar className="w-16 h-16 mx-auto text-foreground/30 mb-4" />
-            <p className="text-lg font-semibold text-foreground mb-2">No exchanges yet</p>
-            <p className="text-foreground/60 mb-6">
-              Browse skills in the Explore page and request swaps!
+            <p className="text-xl font-bold text-foreground mb-2">No exchanges yet</p>
+            <p className="text-foreground/60 mb-6 max-w-sm mx-auto">
+              Find true reciprocal matches and send your first swap request!
             </p>
             <Button
-              onClick={() => router.push('/explore')}
+              onClick={() => router.push('/find-matches')}
               className="rounded-full"
             >
-              Explore Skills
+              Find Matches
             </Button>
           </div>
         )}

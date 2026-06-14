@@ -2,7 +2,6 @@ const Message = require('../models/Message');
 const Notification = require('../models/Notification');
 const Exchange = require('../models/Exchange');
 const User = require('../models/User');
-const { sendMail } = require('../services/mailer');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.sendMessage = asyncHandler(async (req, res) => {
@@ -11,33 +10,41 @@ exports.sendMessage = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'recipientId and content are required' });
   }
 
-  // Check if users are connected (have an accepted exchange)
+  // Prevent messaging yourself
+  if (String(req.user._id) === String(recipientId)) {
+    return res.status(400).json({ message: 'You cannot message yourself' });
+  }
+
+  // Check if users are connected (have an accepted or completed exchange)
   const connection = await Exchange.findOne({
     $or: [
-      { requester: req.user._id, provider: recipientId, status: 'accepted' },
-      { requester: recipientId, provider: req.user._id, status: 'accepted' }
-    ]
+      { requester: req.user._id, provider: recipientId, status: { $in: ['accepted', 'completed'] } },
+      { requester: recipientId, provider: req.user._id, status: { $in: ['accepted', 'completed'] } },
+    ],
   });
 
   if (!connection) {
-    return res.status(403).json({ 
-      message: 'You can only message users with whom you have an accepted skill exchange' 
+    return res.status(403).json({
+      message: 'You can only message users with whom you have an accepted or completed skill exchange',
     });
   }
+
+  const sanitizedContent = typeof content === 'string' ? content.slice(0, 4000) : '';
 
   const msg = await Message.create({
     sender: req.user._id,
     recipient: recipientId,
-    content,
+    content: sanitizedContent,
     exchange: exchangeId || connection._id,
   });
 
-  // Real-time emit to recipient room (works across instances with Redis adapter)
+  // Real-time emit to recipient room
   const io = req.app.get('io');
   if (io) {
     io.to(`user:${String(recipientId)}`).emit('message:new', {
       _id: msg._id,
       sender: String(req.user._id),
+      senderName: req.user.name,
       recipient: String(recipientId),
       content: msg.content,
       createdAt: msg.createdAt,
@@ -56,16 +63,9 @@ exports.sendMessage = asyncHandler(async (req, res) => {
       user: recipientId,
       type: 'message',
       title: 'New message',
-      body: content.slice(0, 140),
+      body: sanitizedContent.slice(0, 140),
       data: { sender: req.user._id, messageId: msg._id },
     });
-    // Optional email notification
-    try {
-      const toUser = await User.findById(recipientId).lean();
-      if (toUser?.email) {
-        await sendMail(toUser.email, 'New message on SkillSwap', `<p>You have a new message.</p><p>"${content.slice(0,200)}"</p>`);
-      }
-    } catch (_) {}
   } catch (_) {}
 
   res.status(201).json(msg);
@@ -120,40 +120,74 @@ exports.unreadCount = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get list of users current user can message (connected via accepted exchanges)
+ * Get list of users current user can message (connected via accepted/completed exchanges)
+ * Includes last message preview, unread count, and timestamp
  */
 exports.getConnections = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  
-  // Find all accepted exchanges
+
+  // Find all accepted or completed exchanges
   const exchanges = await Exchange.find({
     $or: [
-      { requester: userId, status: 'accepted' },
-      { provider: userId, status: 'accepted' }
-    ]
+      { requester: userId, status: { $in: ['accepted', 'completed'] } },
+      { provider: userId, status: { $in: ['accepted', 'completed'] } },
+    ],
   })
-  .populate('requester', 'name email avatarUrl averageRating')
-  .populate('provider', 'name email avatarUrl averageRating')
-  .lean();
+    .populate('requester', 'name avatarUrl averageRating')
+    .populate('provider', 'name avatarUrl averageRating')
+    .lean();
 
   // Extract unique connected users
-  const connections = exchanges.map(exchange => {
+  const seenUserIds = new Set();
+  const connections = [];
+  for (const exchange of exchanges) {
     const isRequester = String(exchange.requester._id) === String(userId);
     const otherUser = isRequester ? exchange.provider : exchange.requester;
-    return {
+    const otherId = String(otherUser._id);
+    if (seenUserIds.has(otherId)) continue;
+    seenUserIds.add(otherId);
+
+    // Get last message between users
+    const lastMessage = await Message.findOne({
+      $or: [
+        { sender: userId, recipient: otherId },
+        { sender: otherId, recipient: userId },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .select('content createdAt sender')
+      .lean();
+
+    // Get unread count from this user
+    const unreadCount = await Message.countDocuments({
+      sender: otherId,
+      recipient: userId,
+      readAt: { $exists: false },
+    });
+
+    connections.push({
       userId: otherUser._id,
       name: otherUser.name,
-      email: otherUser.email,
       avatar: otherUser.avatarUrl,
       rating: otherUser.averageRating,
-      exchangeId: exchange._id
-    };
+      exchangeId: exchange._id,
+      lastMessage: lastMessage
+        ? {
+            content: lastMessage.content.slice(0, 100),
+            createdAt: lastMessage.createdAt,
+            isFromMe: String(lastMessage.sender) === String(userId),
+          }
+        : null,
+      unreadCount,
+    });
+  }
+
+  // Sort by last message timestamp (most recent first)
+  connections.sort((a, b) => {
+    const aTime = a.lastMessage?.createdAt?.getTime() || 0;
+    const bTime = b.lastMessage?.createdAt?.getTime() || 0;
+    return bTime - aTime;
   });
 
-  // Remove duplicates based on userId
-  const uniqueConnections = connections.filter((conn, index, self) =>
-    index === self.findIndex((c) => String(c.userId) === String(conn.userId))
-  );
-
-  res.json({ connections: uniqueConnections });
+  res.json({ connections });
 });

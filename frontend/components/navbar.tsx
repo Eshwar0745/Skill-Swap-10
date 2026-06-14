@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
+import { toast } from "sonner"
 
 interface NavbarProps {
   darkMode: boolean
@@ -18,7 +19,6 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const { isAuthenticated, user, logout, ready } = useAuth()
-  const [menuOpen, setMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<any[]>([])
@@ -47,7 +47,9 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
 
   const loadNotifications = async () => {
     try {
-      const res = await api.notifications.list({ page: 1, limit: 5 })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/notifications?limit=5`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+      }).then(r => r.json())
       setNotifications(res.items || [])
     } catch (e) {
       console.error(e)
@@ -130,74 +132,86 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
           <div className="flex items-center gap-2">
             {isAuthenticated && (
               <>
-                {/* Messages Icon with Badge */}
+                {/* Messages Icon */}
                 <Link href="/messages">
                   <Button variant="ghost" size="icon" className="rounded-full relative">
                     <MessageCircle className="h-5 w-5" />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
                   </Button>
                 </Link>
 
-                {/* Notifications Icon with Dropdown */}
+                {/* Notifications Icon */}
                 <div className="relative">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="rounded-full"
+                    className="rounded-full relative"
                     onClick={() => setNotificationsOpen(!notificationsOpen)}
                   >
                     <Bell className="h-5 w-5" />
                     {notifications.filter(n => !n.readAt).length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
                         {notifications.filter(n => !n.readAt).length}
                       </span>
                     )}
                   </Button>
 
+                  {/* Backdrop */}
                   {notificationsOpen && (
-                    <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-lg p-4 z-50">
+                    <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)}></div>
+                  )}
+
+                  {/* Dropdown */}
+                  {notificationsOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-xl shadow-xl p-4 z-50">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="font-bold">Notifications</h3>
                         {notifications.some(n => !n.readAt) && (
                           <button
-                            className="text-xs text-primary hover:underline"
+                            className="text-xs text-primary hover:underline font-semibold"
                             onClick={async () => {
                               try {
-                                await api.notifications.markAllRead()
+                                await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/notifications/mark-all-read`, {
+                                  method: 'PATCH',
+                                  headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+                                })
                                 loadNotifications()
                               } catch (e) {
                                 console.error(e)
                               }
                             }}
                           >
-                            Mark all as read
+                            Mark all read
                           </button>
                         )}
                       </div>
                       {notifications.length === 0 ? (
-                        <p className="text-sm text-foreground/60">No notifications</p>
+                        <p className="text-sm text-foreground/60 text-center py-4">No notifications</p>
                       ) : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                           {notifications.map((notif) => (
                             <div
                               key={notif._id}
-                              className={`p-3 rounded-lg text-sm ${
-                                notif.readAt ? 'bg-background/50' : 'bg-primary/10'
+                              className={`p-3 rounded-lg text-sm cursor-pointer transition-colors ${
+                                notif.readAt ? 'bg-background hover:bg-background/80' : 'bg-primary/10 hover:bg-primary/20'
                               }`}
                               onClick={async () => {
                                 if (!notif.readAt) {
-                                  await api.notifications.markRead(notif._id)
+                                  await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/notifications/${notif._id}/read`, {
+                                    method: 'PATCH',
+                                    headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+                                  })
                                   loadNotifications()
                                 }
                               }}
                             >
                               <p className="font-semibold">{notif.title}</p>
-                              <p className="text-foreground/70">{notif.body}</p>
-                              <p className="text-xs text-foreground/50 mt-1">
+                              <p className="text-foreground/70 mt-0.5">{notif.body}</p>
+                              <p className="text-[10px] text-foreground/50 mt-1.5 font-medium">
                                 {new Date(notif.createdAt).toLocaleDateString()}
                               </p>
                             </div>
@@ -231,24 +245,24 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
             </motion.div>
 
             {ready && isAuthenticated ? (
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-foreground/80 hidden sm:inline">{user?.name || user?.email}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => logout()}
-                    className="rounded-full transition-all duration-200"
-                    title="Logout"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </Button>
-                </div>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    logout()
+                    toast.success('Logged out successfully')
+                  }}
+                  className="rounded-full transition-all duration-200 gap-2"
+                  title="Logout"
+                >
+                  <span className="text-sm font-semibold hidden sm:inline">{user?.name}</span>
+                  <LogOut className="h-4 w-4 text-foreground/70" />
+                </Button>
               </motion.div>
             ) : (
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link href="/login">
-                  <Button variant="default" className="rounded-full transition-all duration-200">
+                  <Button variant="default" className="rounded-full transition-all duration-200 font-semibold">
                     Login
                   </Button>
                 </Link>
@@ -290,6 +304,7 @@ export default function Navbar({ darkMode, onToggleDarkMode }: NavbarProps) {
                 >
                   <Link
                     href={link.href}
+                    onClick={() => setIsOpen(false)}
                     className={`block px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                       pathname === link.href
                         ? "text-primary bg-primary/10"

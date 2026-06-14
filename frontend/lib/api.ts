@@ -124,7 +124,7 @@ export const api = {
     },
     get: (id: string) => request<any>(`/api/exchanges/${id}`),
     updateStatus: (id: string, status: string) =>
-      request<any>(`/api/exchanges/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
+      request<any>(`/api/exchanges/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   },
   notifications: {
     list: (params?: { page?: number; limit?: number }) => {
@@ -134,11 +134,13 @@ export const api = {
       return request<{ items: any[]; total: number }>(`/api/notifications?${sp}`);
     },
     markRead: (id: string) => 
-      request<any>(`/api/notifications/${id}/read`, { method: 'POST' }),
+      request<any>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
     markAllRead: () =>
-      request<{ updated: number }>(`/api/notifications/mark-all-read`, { method: 'POST' }),
+      request<{ updated: number }>(`/api/notifications/mark-all-read`, { method: 'PATCH' }),
+    unreadCount: () => request<{ count: number }>(`/api/notifications/unread-count`),
   },
   matches: {
+    reciprocal: () => request<any>(`/api/matches/reciprocal`),
     find: (params: { skillTitle?: string; category?: string }) => {
       const sp = new URLSearchParams();
       if (params.skillTitle) sp.set('skillTitle', params.skillTitle);
@@ -146,5 +148,17 @@ export const api = {
       return request<any>(`/api/matches/find?${sp}`);
     },
     myMatches: () => request<any>(`/api/matches/my-matches`),
+  },
+  follows: {
+    check: (userId: string) => request<{ isFollowing: boolean }>(`/api/follow/${userId}/is-following`),
+    follow: (userId: string) => request<any>(`/api/follow/${userId}/follow`, { method: 'POST' }),
+    unfollow: (userId: string) => request<any>(`/api/follow/${userId}/follow`, { method: 'DELETE' }),
+    getFollowers: (userId: string) => request<any>(`/api/follow/${userId}/followers`),
+    getFollowing: (userId: string) => request<any>(`/api/follow/${userId}/following`),
+  },
+  posts: {
+    listForUser: (userId: string) => request<{ items: any[] }>(`/api/posts/user/${userId}`),
+    create: (formData: FormData) => request<any>(`/api/posts`, { method: 'POST', body: formData }),
+    delete: (id: string) => request<any>(`/api/posts/${id}`, { method: 'DELETE' }),
   },
 };

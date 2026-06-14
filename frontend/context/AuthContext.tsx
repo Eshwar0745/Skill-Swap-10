@@ -20,6 +20,7 @@ type AuthContextValue = {
   ready: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  googleLogin: (idToken: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   refresh: () => Promise<boolean>;
   logout: () => Promise<void>;
@@ -71,14 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { token: t, user } = await api.auth.login({ email, password });
-    setUser(user);
+    const { token: t, user: u } = await api.auth.login({ email, password });
+    setUser(u);
+    setAccessToken(t);
+  };
+
+  const googleLogin = async (idToken: string) => {
+    const { token: t, user: u } = await api.auth.googleLogin(idToken);
+    setUser(u);
     setAccessToken(t);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const { token: t, user } = await api.auth.register({ name, email, password });
-    setUser(user);
+    const { token: t, user: u } = await api.auth.register({ name, email, password });
+    setUser(u);
     setAccessToken(t);
   };
 
@@ -101,11 +108,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ user, token, ready, isAuthenticated, login, register, refresh, logout }),
-    [user, token, ready]
+    () => ({ user, token, ready, isAuthenticated, login, googleLogin, register, refresh, logout }),
+    [user, token, ready, isAuthenticated]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <script src="https://accounts.google.com/gsi/client" async defer></script>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

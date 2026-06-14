@@ -6,12 +6,13 @@ import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Star, ArrowLeft } from "lucide-react"
+import { toast } from "sonner"
 
 export default function CreateReviewPage() {
-  const { user, isAuthenticated, ready } = useAuth()
+  const { isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const revieweeId = searchParams?.get('userId')
+  const exchangeId = searchParams?.get('exchangeId')
   
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
@@ -24,44 +25,36 @@ export default function CreateReviewPage() {
       router.push('/login')
       return
     }
-    if (!revieweeId) {
+    if (!exchangeId) {
+      toast.error('No exchange selected for review')
       router.push('/exchanges')
       return
     }
-  }, [ready, isAuthenticated, revieweeId])
+  }, [ready, isAuthenticated, exchangeId])
 
   const handleSubmit = async () => {
-    if (!revieweeId || rating === 0) {
-      alert('Please select a rating')
+    if (!exchangeId || rating === 0) {
+      toast.error('Please select a rating')
       return
     }
 
     setSubmitting(true)
     try {
       await api.reviews.create({
-        revieweeId,
+        exchangeId,
         rating,
         comment: comment.trim(),
-        context: 'exchange'
       })
-      alert('Review submitted successfully!')
+      toast.success('Review submitted successfully!')
       router.push('/exchanges')
     } catch (e: any) {
-      alert(e?.message || 'Failed to submit review')
+      toast.error(e?.message || 'Failed to submit review')
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
+  if (!ready || !isAuthenticated) {
     return null
   }
 
@@ -78,7 +71,7 @@ export default function CreateReviewPage() {
           Back
         </Button>
 
-        <div className="bg-card border border-border rounded-xl p-8">
+        <div className="bg-card border border-border rounded-xl p-8 shadow-sm">
           <h1 className="text-3xl font-bold mb-2">Leave a Review</h1>
           <p className="text-foreground/60 mb-8">Share your experience with this skill exchange</p>
 
@@ -94,20 +87,20 @@ export default function CreateReviewPage() {
                     onClick={() => setRating(star)}
                     onMouseEnter={() => setHoverRating(star)}
                     onMouseLeave={() => setHoverRating(0)}
-                    className="transition-transform hover:scale-110"
+                    className="transition-transform hover:scale-110 focus:outline-none"
                   >
                     <Star
                       className={`w-10 h-10 ${
                         star <= (hoverRating || rating)
                           ? 'fill-amber-500 text-amber-500'
-                          : 'text-foreground/30'
+                          : 'text-foreground/20'
                       }`}
                     />
                   </button>
                 ))}
               </div>
               {rating > 0 && (
-                <p className="text-sm text-foreground/60 mt-2">
+                <p className="text-sm font-medium text-amber-600 mt-2">
                   {rating === 1 && 'Poor'}
                   {rating === 2 && 'Fair'}
                   {rating === 3 && 'Good'}
@@ -125,11 +118,11 @@ export default function CreateReviewPage() {
                 onChange={(e) => setComment(e.target.value)}
                 rows={5}
                 placeholder="Share your thoughts about the skill exchange..."
-                className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                maxLength={500}
+                className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                maxLength={2000}
               />
-              <p className="text-xs text-foreground/50 mt-1">
-                {comment.length}/500 characters
+              <p className="text-xs text-foreground/50 mt-1 text-right">
+                {comment.length}/2000
               </p>
             </div>
 

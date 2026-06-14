@@ -24,6 +24,8 @@ const exchangeRoutes = require('./routes/exchangeRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const matchRoutes = require('./routes/matchRoutes');
+const followRoutes = require('./routes/followRoutes');
+const postRoutes = require('./routes/postRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -88,12 +90,12 @@ app.use('/api/exchanges', exchangeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/follow', followRoutes);
+app.use('/api/posts', postRoutes);
 
 // 404 and error handler
 app.use(notFound);
 app.use(errorHandler);
-
-const PORT = process.env.PORT || 4000;
 
 // Optionally attach Redis and Socket.IO adapter for scale-out
 const redis = createRedisClient();
@@ -111,14 +113,19 @@ if (redis) {
   }
 }
 
-// Start server only after DB connects
-connectDB()
-  .then(() => {
-    server.listen(PORT, () => {
-      console.log(`Server listening on port ${PORT}`);
+if (process.env.NODE_ENV !== 'test') {
+  // Start server only after DB connects
+  connectDB()
+    .then(() => {
+      const PORT = process.env.PORT || 4000;
+      server.listen(PORT, () => {
+        console.log(`Server listening on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to start server:', err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('Failed to start server:', err);
-    process.exit(1);
-  });
+}
+
+module.exports = app;

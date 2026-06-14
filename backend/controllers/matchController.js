@@ -5,187 +5,135 @@ const Exchange = require('../models/Exchange');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 /**
- * Find users who offer a specific skill
- * Also checks if requesting user has skills that match what providers want (mutual match)
+ * Normalize a skill title for comparison: trim, lowercase, collapse spaces
  */
-exports.findMatchesForRequestedSkill = asyncHandler(async (req, res) => {
-  const { skillTitle, category } = req.query;
-  const requesterId = req.user._id;
-
-  if (!skillTitle && !category) {
-    return res.status(400).json({ message: 'skillTitle or category is required' });
-  }
-
-  // Build filter for offered skills
-  const filter = {};
-  if (skillTitle) {
-    filter.$or = [
-      { title: new RegExp(skillTitle, 'i') },
-      { $text: { $search: skillTitle } }
-    ];
-  }
-  if (category) {
-    filter.categories = category;
-  }
-
-  // Find users who offer this skill (exclude self)
-  const offeredSkills = await OfferedSkill.find(filter)
-    .populate('user', 'name email avatarUrl location averageRating reviewsCount')
-    .lean();
-
-  // Get requester's offered skills to check for mutual matches
-  const myOfferedSkills = await OfferedSkill.find({ user: requesterId }).lean();
-  const myOfferedTitles = myOfferedSkills.map(s => s.title.toLowerCase());
-
-  // For each provider, check if they want something I offer (mutual match)
-  const matches = [];
-  for (const offeredSkill of offeredSkills) {
-    const providerId = offeredSkill.user._id;
-    
-    // Skip if it's me
-    if (String(providerId) === String(requesterId)) continue;
-
-    // Check if provider wants any skill I offer
-    const providerWants = await RequestedSkill.find({ user: providerId }).lean();
-    const mutualMatches = providerWants.filter(wanted => 
-      myOfferedTitles.some(mySkill => 
-        wanted.title.toLowerCase().includes(mySkill) || 
-        mySkill.includes(wanted.title.toLowerCase())
-      )
-    );
-
-    // Check if we already have an exchange (pending or accepted)
-    const existingExchange = await Exchange.findOne({
-      $or: [
-        { requester: requesterId, provider: providerId },
-        { requester: providerId, provider: requesterId }
-      ],
-      status: { $in: ['proposed', 'accepted'] }
-    });
-
-    matches.push({
-      skill: {
-        _id: offeredSkill._id,
-        title: offeredSkill.title,
-        description: offeredSkill.description,
-        categories: offeredSkill.categories,
-        availability: offeredSkill.availability,
-        location: offeredSkill.location,
-        remote: offeredSkill.remote
-      },
-      provider: offeredSkill.user,
-      isMutualMatch: mutualMatches.length > 0,
-      mutualSkills: mutualMatches.map(m => m.title),
-      hasActiveExchange: !!existingExchange,
-      exchangeStatus: existingExchange?.status
-    });
-  }
-
-  // Sort by: mutual matches first, then by rating
-  matches.sort((a, b) => {
-    if (a.isMutualMatch && !b.isMutualMatch) return -1;
-    if (!a.isMutualMatch && b.isMutualMatch) return 1;
-    return (b.provider.averageRating || 0) - (a.provider.averageRating || 0);
-  });
-
-  res.json({
-    query: { skillTitle, category },
-    totalMatches: matches.length,
-    mutualMatches: matches.filter(m => m.isMutualMatch).length,
-    matches
-  });
-});
+function norm(title) {
+  if (!title || typeof title !== 'string') return '';
+  return title.trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 /**
- * Get all potential matches for the current user
- * Shows what they want and who offers it
+ * GET /api/matches/reciprocal
+ *
+ * True reciprocal matching:
+ *  - User A wants at least one skill that User B offers
+ *  - User B wants at least one skill that User A offers
+ *
+ * Returns only mutual matches. No one-sided. No counters. No scores.
  */
-exports.getMyMatches = asyncHandler(async (req, res) => {
+exports.getReciprocalMatches = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
-  // Get all skills I want to learn
-  const myRequestedSkills = await RequestedSkill.find({ user: userId }).lean();
+  // 1. Fetch my skills
+  const [myOffered, myRequested] = await Promise.all([
+    OfferedSkill.find({ user: userId }).lean(),
+    RequestedSkill.find({ user: userId }).lean(),
+  ]);
 
-  if (myRequestedSkills.length === 0) {
+  if (myOffered.length === 0 || myRequested.length === 0) {
     return res.json({
-      message: 'Add skills you want to learn to find matches',
-      matches: []
+      matches: [],
+      message: myOffered.length === 0
+        ? 'Add skills you can teach to find matches'
+        : 'Add skills you want to learn to find matches',
     });
   }
 
-  // Get all skills I offer (for mutual match detection)
-  const myOfferedSkills = await OfferedSkill.find({ user: userId }).lean();
-  const myOfferedTitles = myOfferedSkills.map(s => s.title.toLowerCase());
+  const myOfferedNorm = myOffered.map((s) => norm(s.title));
+  const myRequestedNorm = myRequested.map((s) => norm(s.title));
 
-  const allMatches = [];
+  // 2. Find users who OFFER skills I WANT (candidates who can teach me)
+  //    Use case-insensitive exact match via normalized titles
+  const candidateOffered = await OfferedSkill.find({
+    user: { $ne: userId },
+  }).lean();
 
-  for (const requestedSkill of myRequestedSkills) {
-    // Find users who offer this skill
-    const providers = await OfferedSkill.find({
-      $or: [
-        { title: new RegExp(requestedSkill.title, 'i') },
-        { categories: { $in: requestedSkill.categories } }
-      ],
-      user: { $ne: userId }
-    })
-    .populate('user', 'name email avatarUrl location averageRating reviewsCount')
-    .limit(10)
-    .lean();
-
-    for (const provider of providers) {
-      const providerId = provider.user._id;
-
-      // Check mutual match
-      const providerWants = await RequestedSkill.find({ user: providerId }).lean();
-      const mutualMatches = providerWants.filter(wanted => 
-        myOfferedTitles.some(mySkill => 
-          wanted.title.toLowerCase().includes(mySkill) || 
-          mySkill.includes(wanted.title.toLowerCase())
-        )
-      );
-
-      // Check existing exchange
-      const existingExchange = await Exchange.findOne({
-        $or: [
-          { requester: userId, provider: providerId },
-          { requester: providerId, provider: userId }
-        ],
-        status: { $in: ['proposed', 'accepted'] }
-      });
-
-      allMatches.push({
-        requestedSkill: {
-          _id: requestedSkill._id,
-          title: requestedSkill.title,
-          categories: requestedSkill.categories
-        },
-        offeredSkill: {
-          _id: provider._id,
-          title: provider.title,
-          description: provider.description,
-          location: provider.location
-        },
-        provider: provider.user,
-        isMutualMatch: mutualMatches.length > 0,
-        mutualSkills: mutualMatches.map(m => m.title),
-        hasActiveExchange: !!existingExchange,
-        exchangeStatus: existingExchange?.status
-      });
+  // Map: userId -> list of offered skill titles that match my requested
+  const canTeachMeMap = new Map(); // userId -> [{ title, _id }]
+  for (const skill of candidateOffered) {
+    const skillNorm = norm(skill.title);
+    if (myRequestedNorm.includes(skillNorm)) {
+      const uid = String(skill.user);
+      if (!canTeachMeMap.has(uid)) canTeachMeMap.set(uid, []);
+      canTeachMeMap.get(uid).push({ title: skill.title, _id: skill._id });
     }
   }
 
-  // Sort by mutual matches first
-  allMatches.sort((a, b) => {
-    if (a.isMutualMatch && !b.isMutualMatch) return -1;
-    if (!a.isMutualMatch && b.isMutualMatch) return 1;
-    return (b.provider.averageRating || 0) - (a.provider.averageRating || 0);
-  });
+  // 3. Find users who WANT skills I OFFER (candidates I can teach)
+  const candidateRequested = await RequestedSkill.find({
+    user: { $ne: userId },
+  }).lean();
 
-  res.json({
-    totalMatches: allMatches.length,
-    mutualMatches: allMatches.filter(m => m.isMutualMatch).length,
-    matches: allMatches
-  });
+  const iCanTeachMap = new Map(); // userId -> [{ title, _id }]
+  for (const skill of candidateRequested) {
+    const skillNorm = norm(skill.title);
+    if (myOfferedNorm.includes(skillNorm)) {
+      const uid = String(skill.user);
+      if (!iCanTeachMap.has(uid)) iCanTeachMap.set(uid, []);
+      iCanTeachMap.get(uid).push({ title: skill.title, _id: skill._id });
+    }
+  }
+
+  // 4. Intersect: only users in BOTH maps are reciprocal matches
+  const reciprocalUserIds = [];
+  for (const uid of canTeachMeMap.keys()) {
+    if (iCanTeachMap.has(uid)) {
+      reciprocalUserIds.push(uid);
+    }
+  }
+
+  if (reciprocalUserIds.length === 0) {
+    return res.json({ matches: [] });
+  }
+
+  // 5. Fetch user details for all reciprocal matches
+  const users = await User.find({ _id: { $in: reciprocalUserIds } })
+    .select('name avatarUrl location averageRating reviewsCount followersCount')
+    .lean();
+
+  const userMap = new Map();
+  for (const u of users) userMap.set(String(u._id), u);
+
+  // 6. Check active exchanges between me and each match
+  const activeExchanges = await Exchange.find({
+    $or: reciprocalUserIds.flatMap((uid) => [
+      { requester: userId, provider: uid, status: { $in: ['proposed', 'accepted'] } },
+      { requester: uid, provider: userId, status: { $in: ['proposed', 'accepted'] } },
+    ]),
+  }).lean();
+
+  const exchangeMap = new Map(); // other userId -> exchange
+  for (const ex of activeExchanges) {
+    const other = String(ex.requester) === String(userId) ? String(ex.provider) : String(ex.requester);
+    if (!exchangeMap.has(other)) exchangeMap.set(other, ex);
+  }
+
+  // 7. Build match cards
+  const matches = reciprocalUserIds
+    .map((uid) => {
+      const u = userMap.get(uid);
+      if (!u) return null;
+      const activeEx = exchangeMap.get(uid);
+      return {
+        user: {
+          _id: u._id,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          location: u.location,
+          averageRating: u.averageRating || 0,
+          reviewsCount: u.reviewsCount || 0,
+          followersCount: u.followersCount || 0,
+        },
+        skillsTheyCanTeachMe: canTeachMeMap.get(uid).map((s) => s.title),
+        skillsICanTeachThem: iCanTeachMap.get(uid).map((s) => s.title),
+        hasActiveExchange: !!activeEx,
+        exchangeStatus: activeEx?.status || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.user.averageRating || 0) - (a.user.averageRating || 0));
+
+  res.json({ matches });
 });
 
 module.exports = exports;
