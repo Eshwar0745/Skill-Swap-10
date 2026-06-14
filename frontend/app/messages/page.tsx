@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/context/AuthContext"
@@ -10,6 +10,14 @@ import { Send, Users, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading messages...</div>}>
+      <MessagesContent />
+    </Suspense>
+  )
+}
+
+function MessagesContent() {
   const { user, isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
