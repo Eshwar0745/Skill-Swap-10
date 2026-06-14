@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
@@ -9,6 +9,14 @@ import { Star, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
 export default function CreateReviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading review form...</div>}>
+      <CreateReviewContent />
+    </Suspense>
+  )
+}
+
+function CreateReviewContent() {
   const { isAuthenticated, ready } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
